@@ -1,4 +1,4 @@
-// BrainDiagnosticsPanel.js - Detailed diagnostic information for brain pair
+// BrainDiagnosticsPanel.js - Futuristic diagnostic information for brain pair
 
 import React, { memo, useMemo } from 'react';
 import { 
@@ -16,8 +16,8 @@ import {
   Accordion,
   AccordionSummary,
   AccordionDetails,
-  Badge,
-  Tooltip
+  Tooltip,
+  Fade
 } from '@mui/material';
 
 // Icons
@@ -37,6 +37,42 @@ import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import WarningIcon from '@mui/icons-material/Warning';
 import SettingsIcon from '@mui/icons-material/Settings';
+import ScienceIcon from '@mui/icons-material/Science';
+import BiotechIcon from '@mui/icons-material/Biotech';
+
+// Custom styled components
+const GlowingCard = ({ children, borderColor = '#4a7bff', glow = true }) => (
+  <Paper elevation={0} sx={{
+    position: 'relative',
+    borderRadius: '12px',
+    background: 'linear-gradient(145deg, rgba(18, 25, 55, 0.8), rgba(10, 15, 35, 0.9))',
+    border: `1px solid ${borderColor}`,
+    boxShadow: glow ? `0 0 15px ${borderColor}80` : 'none',
+    overflow: 'hidden',
+    '&:before': {
+      content: '""',
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      height: '2px',
+      background: `linear-gradient(90deg, transparent, ${borderColor}, transparent)`,
+    },
+    p: 1.5,
+    mb: 2
+  }}>
+    {children}
+  </Paper>
+);
+
+const NeonDivider = () => (
+  <Divider sx={{
+    my: 2,
+    background: 'linear-gradient(90deg, transparent, #4a7bff, transparent)',
+    height: '1px',
+    border: 'none'
+  }} />
+);
 
 // Activity indicator for channel status
 const ActivityIndicator = memo(({ value }) => (
@@ -48,7 +84,15 @@ const ActivityIndicator = memo(({ value }) => (
       sx={{ 
         height: 8,
         borderRadius: 4,
-        backgroundColor: 'rgba(20, 20, 40, 0.6)'
+        background: 'linear-gradient(90deg, #1a237e, #4a148c)',
+        '& .MuiLinearProgress-bar': {
+          borderRadius: 4,
+          background: value > 75 ? 'linear-gradient(90deg, #ff416c, #ff4b2b)' : 
+                     value > 50 ? 'linear-gradient(90deg, #ffb347, #ffcc33)' : 
+                     value > 20 ? 'linear-gradient(90deg, #2196f3, #21cbf3)' : 
+                                  'linear-gradient(90deg, #00c6ff, #0072ff)',
+          boxShadow: value > 50 ? '0 0 8px rgba(255, 255, 255, 0.6)' : 'none'
+        }
       }}
     />
     <Box sx={{ 
@@ -56,7 +100,8 @@ const ActivityIndicator = memo(({ value }) => (
       right: 0, 
       top: -2, 
       fontSize: '0.6rem', 
-      color: 'text.secondary' 
+      color: '#a0b0ff',
+      fontWeight: 'bold'
     }}>
       {value}%
     </Box>
@@ -83,34 +128,50 @@ const ChannelStatusList = memo(({ channels, limit = 5 }) => {
   
   if (topChannels.length === 0) {
     return (
-      <Typography variant="body2" color="text.disabled" sx={{ fontStyle: 'italic', mt: 1 }}>
+      <Typography variant="body2" color="text.disabled" sx={{ 
+        fontStyle: 'italic', 
+        mt: 1,
+        textAlign: 'center',
+        py: 1,
+        background: 'rgba(30, 30, 60, 0.3)',
+        borderRadius: '6px'
+      }}>
         No active channels detected
       </Typography>
     );
   }
   
   return (
-    <List dense disablePadding sx={{ mt: 1 }}>
+    <List dense disablePadding sx={{ mt: 1, background: 'rgba(20, 25, 60, 0.2)', borderRadius: '8px' }}>
       {topChannels.map((channel, index) => (
-        <ListItem key={index} sx={{ py: 0.5 }}>
+        <ListItem key={index} sx={{ py: 0.5, borderBottom: '1px solid rgba(80, 100, 200, 0.1)' }}>
           <ListItemIcon sx={{ minWidth: 36 }}>
             <SignalCellularAltIcon 
               fontSize="small"
-              color={channel.activity > 75 ? "error" : channel.activity > 50 ? "warning" : "primary"}
+              sx={{
+                color: channel.activity > 75 ? "#ff416c" : channel.activity > 50 ? "#ffb347" : "#00c6ff",
+                filter: channel.activity > 50 ? 'drop-shadow(0 0 4px currentColor)' : 'none'
+              }}
             />
           </ListItemIcon>
           <ListItemText 
             primary={
               <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                <Typography variant="body2" component="span" sx={{ mr: 1 }}>
+                <Typography variant="body2" component="span" sx={{ 
+                  mr: 1,
+                  fontWeight: channel.activity > 50 ? 'bold' : 'normal',
+                  color: '#e0e0ff'
+                }}>
                   {channel.name || `CH${channel.id}`}
                 </Typography>
                 <Chip 
                   size="small"
                   label={`${channel.transitions || 0} trans`}
-                  color="default"
                   sx={{ 
                     height: 20, 
+                    background: 'rgba(40, 45, 90, 0.7)',
+                    border: '1px solid rgba(100, 120, 220, 0.3)',
+                    color: '#b0c0ff',
                     '& .MuiChip-label': { 
                       px: 1,
                       py: 0,
@@ -121,14 +182,18 @@ const ChannelStatusList = memo(({ channels, limit = 5 }) => {
               </Box>
             }
             secondary={<ActivityIndicator value={channel.activity || 0} />}
-            primaryTypographyProps={{ fontWeight: channel.activity > 50 ? 'bold' : 'normal' }}
           />
         </ListItem>
       ))}
       
       {sortedChannels.length > limit && (
-        <ListItem sx={{ py: 0.5, justifyContent: 'center' }}>
-          <Typography variant="caption" color="text.secondary">
+        <ListItem sx={{ 
+          py: 0.5, 
+          justifyContent: 'center',
+          background: 'rgba(30, 35, 70, 0.3)',
+          borderTop: '1px solid rgba(80, 100, 200, 0.1)'
+        }}>
+          <Typography variant="caption" sx={{ color: '#8090ff', fontWeight: 'bold' }}>
             +{sortedChannels.length - limit} more channels
           </Typography>
         </ListItem>
@@ -139,17 +204,17 @@ const ChannelStatusList = memo(({ channels, limit = 5 }) => {
 
 // Status indicator component
 const StatusIndicator = memo(({ status }) => {
-  let color = "default";
+  let color = "#4a7bff";
   let icon = <InfoIcon fontSize="small" />;
   
   if (status === "success" || status === "active" || status === "good") {
-    color = "success";
+    color = "#00e676";
     icon = <CheckCircleIcon fontSize="small" />;
   } else if (status === "warning") {
-    color = "warning";
+    color = "#ffca28";
     icon = <WarningIcon fontSize="small" />;
   } else if (status === "error" || status === "inactive") {
-    color = "error";
+    color = "#ff5252";
     icon = <ErrorOutlineIcon fontSize="small" />;
   }
   
@@ -158,8 +223,17 @@ const StatusIndicator = memo(({ status }) => {
       icon={icon} 
       size="small" 
       label={status.toUpperCase()} 
-      color={color}
-      sx={{ height: 24 }}
+      sx={{ 
+        height: 24,
+        background: 'rgba(30, 35, 70, 0.7)',
+        border: `1px solid ${color}`,
+        color: color,
+        fontWeight: 'bold',
+        boxShadow: `0 0 8px ${color}40`,
+        '& .MuiChip-icon': {
+          color: color
+        }
+      }}
     />
   );
 });
@@ -170,18 +244,20 @@ const BrainDetails = memo(({ brain, stats }) => {
   
   const status = brain.isActive ? "active" : "inactive";
   const healthStatus = stats.totalTransitions > 1000 ? "good" : stats.totalTransitions > 0 ? "warning" : "error";
+  const borderColor = brain.isActive ? '#00e676' : '#ff5252';
   
   return (
-    <Paper elevation={2} sx={{ 
-      p: 1.5, 
-      mb: 2, 
-      backgroundColor: 'rgba(25, 25, 60, 0.6)',
-      borderLeft: `4px solid ${brain.isActive ? '#4caf50' : '#f44336'}`
-    }}>
+    <GlowingCard borderColor={borderColor}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-        <Typography variant="subtitle1" sx={{ fontWeight: 'bold', display: 'flex', alignItems: 'center' }}>
-          <DevicesIcon fontSize="small" sx={{ mr: 0.5 }} />
-          Brain {brain.id + 1}
+        <Typography variant="subtitle1" sx={{ 
+          fontWeight: 'bold', 
+          display: 'flex', 
+          alignItems: 'center',
+          color: '#e0f0ff',
+          letterSpacing: '0.5px'
+        }}>
+          <BiotechIcon fontSize="small" sx={{ mr: 1, color: borderColor }} />
+          Neural Unit {brain.id + 1}
         </Typography>
         <StatusIndicator status={status} />
       </Box>
@@ -189,29 +265,35 @@ const BrainDetails = memo(({ brain, stats }) => {
       <Grid container spacing={1} sx={{ mb: 1 }}>
         <Grid item xs={6}>
           <Box sx={{ display: 'flex', alignItems: 'center' }}>
-            <InfoIcon fontSize="small" sx={{ mr: 0.5, opacity: 0.7 }} />
-            <Typography variant="body2" color="text.secondary">Model:</Typography>
+            <ScienceIcon fontSize="small" sx={{ mr: 0.5, color: '#8090ff' }} />
+            <Typography variant="body2" sx={{ color: '#a0b0ff' }}>Model:</Typography>
           </Box>
-          <Typography variant="body2" sx={{ fontWeight: 'medium', ml: 3 }}>{brain.model || "Unknown"}</Typography>
+          <Typography variant="body2" sx={{ fontWeight: 'medium', ml: 3, color: '#e0f0ff' }}>
+            {brain.model || "Unknown"}
+          </Typography>
         </Grid>
         <Grid item xs={6}>
           <Box sx={{ display: 'flex', alignItems: 'center' }}>
-            <MemoryIcon fontSize="small" sx={{ mr: 0.5, opacity: 0.7 }} />
-            <Typography variant="body2" color="text.secondary">Serial:</Typography>
+            <MemoryIcon fontSize="small" sx={{ mr: 0.5, color: '#8090ff' }} />
+            <Typography variant="body2" sx={{ color: '#a0b0ff' }}>Serial:</Typography>
           </Box>
-          <Typography variant="body2" sx={{ fontWeight: 'medium', ml: 3 }}>{brain.serialNumber || "Unknown"}</Typography>
+          <Typography variant="body2" sx={{ fontWeight: 'medium', ml: 3, color: '#e0f0ff' }}>
+            {brain.serialNumber || "Unknown"}
+          </Typography>
         </Grid>
         <Grid item xs={6}>
           <Box sx={{ display: 'flex', alignItems: 'center' }}>
-            <SignalCellularAltIcon fontSize="small" sx={{ mr: 0.5, opacity: 0.7 }} />
-            <Typography variant="body2" color="text.secondary">Active Channels:</Typography>
+            <SignalCellularAltIcon fontSize="small" sx={{ mr: 0.5, color: '#8090ff' }} />
+            <Typography variant="body2" sx={{ color: '#a0b0ff' }}>Active Channels:</Typography>
           </Box>
-          <Typography variant="body2" sx={{ fontWeight: 'medium', ml: 3 }}>{stats.activeChannels}</Typography>
+          <Typography variant="body2" sx={{ fontWeight: 'medium', ml: 3, color: '#e0f0ff' }}>
+            {stats.activeChannels}
+          </Typography>
         </Grid>
         <Grid item xs={6}>
           <Box sx={{ display: 'flex', alignItems: 'center' }}>
-            <NetworkCheckIcon fontSize="small" sx={{ mr: 0.5, opacity: 0.7 }} />
-            <Typography variant="body2" color="text.secondary">Signal Health:</Typography>
+            <NetworkCheckIcon fontSize="small" sx={{ mr: 0.5, color: '#8090ff' }} />
+            <Typography variant="body2" sx={{ color: '#a0b0ff' }}>Signal Health:</Typography>
           </Box>
           <Box sx={{ ml: 3 }}>
             <StatusIndicator status={healthStatus} />
@@ -221,12 +303,15 @@ const BrainDetails = memo(({ brain, stats }) => {
       
       <Accordion disableGutters elevation={0} sx={{ 
         backgroundColor: 'transparent',
-        '&:before': { display: 'none' }
+        '&:before': { display: 'none' },
+        border: '1px solid rgba(80, 100, 200, 0.2)',
+        borderRadius: '8px !important',
+        mt: 1
       }}>
         <AccordionSummary 
-          expandIcon={<ExpandMoreIcon />}
+          expandIcon={<ExpandMoreIcon sx={{ color: '#8090ff' }} />}
           sx={{ 
-            p: 0,
+            p: '0 8px',
             minHeight: 'unset',
             '& .MuiAccordionSummary-content': {
               margin: 0,
@@ -234,8 +319,8 @@ const BrainDetails = memo(({ brain, stats }) => {
             }
           }}
         >
-          <ToggleOnIcon fontSize="small" sx={{ mr: 0.5, color: 'primary.main' }} />
-          <Typography variant="body2" color="primary.main">
+          <ToggleOnIcon fontSize="small" sx={{ mr: 1, color: '#00c6ff' }} />
+          <Typography variant="body2" sx={{ color: '#00c6ff', fontWeight: 'bold' }}>
             Channel Activity
           </Typography>
         </AccordionSummary>
@@ -243,7 +328,7 @@ const BrainDetails = memo(({ brain, stats }) => {
           <ChannelStatusList channels={brain.channels} limit={5} />
         </AccordionDetails>
       </Accordion>
-    </Paper>
+    </GlowingCard>
   );
 });
 
@@ -282,136 +367,350 @@ const BrainDiagnosticsPanel = ({
     };
   }, [brain1, brain2, safeStats1, safeStats2]);
   
+  const borderColor = diagnosticData.systemHealth === 'good' ? '#00e676' : 
+                     diagnosticData.systemHealth === 'warning' ? '#ffca28' : 
+                     '#ff5252';
+  
   return (
-    <Box sx={{ height: '100%' }}>
-      <Typography variant="h6" gutterBottom sx={{ 
-        color: 'primary.main', 
-        borderBottom: '1px solid rgba(100, 100, 255, 0.2)',
-        pb: 1,
-        display: 'flex',
-        alignItems: 'center'
-      }}>
-        <InfoIcon sx={{ mr: 1 }} />
-        Diagnostic Information
-      </Typography>
+    <Box sx={{ 
+      height: '100%',
+      background: 'linear-gradient(135deg, #0c1027 0%, #1a1f4b 100%)',
+      p: 2,
+      borderRadius: '16px',
+      boxShadow: '0 10px 30px rgba(0, 0, 30, 0.5)',
+      border: '1px solid rgba(80, 100, 200, 0.2)',
+      position: 'relative',
+      overflow: 'hidden',
+      '&:before': {
+        content: '""',
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        height: '4px',
+        background: 'linear-gradient(90deg, #00c6ff, #0072ff, #00c6ff)',
+        backgroundSize: '200% auto',
+        animation: 'gradientShift 3s linear infinite',
+      }
+    }}>
+      <style>
+        {`
+          @keyframes gradientShift {
+            0% { background-position: 0% 50%; }
+            100% { background-position: 200% 50%; }
+          }
+        `}
+      </style>
+      
+      <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+        <ScienceIcon sx={{ 
+          fontSize: 32, 
+          mr: 1.5, 
+          color: '#4a7bff',
+          filter: 'drop-shadow(0 0 6px #4a7bff)'
+        }} />
+        <Typography variant="h5" sx={{ 
+          fontWeight: 'bold',
+          background: 'linear-gradient(90deg, #e0f0ff, #a0c0ff)',
+          WebkitBackgroundClip: 'text',
+          WebkitTextFillColor: 'transparent',
+          letterSpacing: '1px',
+          textShadow: '0 0 10px rgba(100, 150, 255, 0.5)'
+        }}>
+          NEURAL DIAGNOSTICS
+        </Typography>
+      </Box>
       
       {/* System overview */}
-      <Paper elevation={2} sx={{ 
-        p: 1.5, 
-        mb: 3, 
-        backgroundColor: diagnosticData.systemHealth === 'good' ? 'rgba(0, 50, 0, 0.2)' : 
-                       diagnosticData.systemHealth === 'warning' ? 'rgba(50, 50, 0, 0.2)' : 
-                       'rgba(50, 0, 0, 0.2)'
-      }}>
+      <GlowingCard borderColor={borderColor} glow={diagnosticData.systemHealth !== 'error'}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-          <Typography variant="subtitle1" fontWeight="bold">System Overview</Typography>
+          <Typography variant="subtitle1" sx={{ 
+            fontWeight: 'bold',
+            color: '#e0f0ff',
+            letterSpacing: '0.5px'
+          }}>
+            <DevicesIcon sx={{ mr: 1, verticalAlign: 'middle' }} />
+            System Overview
+          </Typography>
           <StatusIndicator status={diagnosticData.systemHealth} />
         </Box>
         
-        <List dense disablePadding>
-          <ListItem sx={{ py: 0.5 }}>
-            <ListItemIcon sx={{ minWidth: 36 }}>
-              <DevicesIcon fontSize="small" />
-            </ListItemIcon>
-            <ListItemText 
-              primary="Active Devices"
-              secondary={`${diagnosticData.activeDevices}/2`}
-            />
-          </ListItem>
+        <Grid container spacing={2} sx={{ mt: 1 }}>
+          <Grid item xs={6}>
+            <Box sx={{ 
+              background: 'rgba(30, 35, 70, 0.4)',
+              borderRadius: '8px',
+              p: 1.5,
+              border: '1px solid rgba(80, 100, 200, 0.2)',
+              height: '100%'
+            }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                <DevicesIcon fontSize="small" sx={{ mr: 1, color: '#8090ff' }} />
+                <Typography variant="body2" sx={{ color: '#a0b0ff' }}>Active Devices</Typography>
+              </Box>
+              <Typography variant="h5" sx={{ 
+                textAlign: 'center', 
+                fontWeight: 'bold',
+                color: '#e0f0ff',
+                textShadow: '0 0 8px rgba(100, 150, 255, 0.5)'
+              }}>
+                {diagnosticData.activeDevices}<Typography variant="caption" sx={{ color: '#8090ff', ml: 0.5 }}>/2</Typography>
+              </Typography>
+            </Box>
+          </Grid>
           
-          <ListItem sx={{ py: 0.5 }}>
-            <ListItemIcon sx={{ minWidth: 36 }}>
-              <SignalCellularAltIcon fontSize="small" />
-            </ListItemIcon>
-            <ListItemText 
-              primary="Total Active Channels"
-              secondary={diagnosticData.totalActiveChannels}
-            />
-          </ListItem>
+          <Grid item xs={6}>
+            <Box sx={{ 
+              background: 'rgba(30, 35, 70, 0.4)',
+              borderRadius: '8px',
+              p: 1.5,
+              border: '1px solid rgba(80, 100, 200, 0.2)',
+              height: '100%'
+            }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                <SignalCellularAltIcon fontSize="small" sx={{ mr: 1, color: '#8090ff' }} />
+                <Typography variant="body2" sx={{ color: '#a0b0ff' }}>Active Channels</Typography>
+              </Box>
+              <Typography variant="h5" sx={{ 
+                textAlign: 'center', 
+                fontWeight: 'bold',
+                color: '#e0f0ff',
+                textShadow: '0 0 8px rgba(100, 150, 255, 0.5)'
+              }}>
+                {diagnosticData.totalActiveChannels}
+              </Typography>
+            </Box>
+          </Grid>
           
-          <ListItem sx={{ py: 0.5 }}>
-            <ListItemIcon sx={{ minWidth: 36 }}>
-              <AccessTimeFilledIcon fontSize="small" />
-            </ListItemIcon>
-            <ListItemText 
-              primary="Current Transitions"
-              secondary={diagnosticData.currentTransitions}
-            />
-          </ListItem>
+          <Grid item xs={6}>
+            <Box sx={{ 
+              background: 'rgba(30, 35, 70, 0.4)',
+              borderRadius: '8px',
+              p: 1.5,
+              border: '1px solid rgba(80, 100, 200, 0.2)',
+              height: '100%'
+            }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                <AccessTimeFilledIcon fontSize="small" sx={{ mr: 1, color: '#8090ff' }} />
+                <Typography variant="body2" sx={{ color: '#a0b0ff' }}>Current Transitions</Typography>
+              </Box>
+              <Typography variant="h5" sx={{ 
+                textAlign: 'center', 
+                fontWeight: 'bold',
+                color: '#e0f0ff',
+                textShadow: '0 0 8px rgba(100, 150, 255, 0.5)'
+              }}>
+                {diagnosticData.currentTransitions}
+              </Typography>
+            </Box>
+          </Grid>
           
-          <ListItem sx={{ py: 0.5 }}>
-            <ListItemIcon sx={{ minWidth: 36 }}>
-              <StorageIcon fontSize="small" />
-            </ListItemIcon>
-            <ListItemText 
-              primary="Total Transitions"
-              secondary={diagnosticData.totalTransitions.toLocaleString()}
-            />
-          </ListItem>
-        </List>
-      </Paper>
+          <Grid item xs={6}>
+            <Box sx={{ 
+              background: 'rgba(30, 35, 70, 0.4)',
+              borderRadius: '8px',
+              p: 1.5,
+              border: '1px solid rgba(80, 100, 200, 0.2)',
+              height: '100%'
+            }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                <StorageIcon fontSize="small" sx={{ mr: 1, color: '#8090ff' }} />
+                <Typography variant="body2" sx={{ color: '#a0b0ff' }}>Total Transitions</Typography>
+              </Box>
+              <Typography variant="h5" sx={{ 
+                textAlign: 'center', 
+                fontWeight: 'bold',
+                color: '#e0f0ff',
+                textShadow: '0 0 8px rgba(100, 150, 255, 0.5)'
+              }}>
+                {formatNumber(diagnosticData.totalTransitions)}
+              </Typography>
+            </Box>
+          </Grid>
+        </Grid>
+      </GlowingCard>
       
       {/* Brain 1 details */}
       {brain1 && (
         <>
-          <Typography variant="subtitle2" gutterBottom color="primary.light" sx={{ fontWeight: 'bold' }}>
-            BRAIN {brain1.id + 1} DETAILS
+          <Typography variant="subtitle2" gutterBottom sx={{ 
+            fontWeight: 'bold',
+            color: '#00c6ff',
+            letterSpacing: '1px',
+            textTransform: 'uppercase',
+            display: 'flex',
+            alignItems: 'center'
+          }}>
+            <BiotechIcon fontSize="small" sx={{ mr: 1 }} />
+            Neural Unit {brain1.id + 1}
           </Typography>
-          <BrainDetails brain={brain1} stats={safeStats1} />
+          <Fade in={true} timeout={800}>
+            <Box>
+              <BrainDetails brain={brain1} stats={safeStats1} />
+            </Box>
+          </Fade>
         </>
       )}
       
       {/* Brain 2 details */}
       {brain2 && (
         <>
-          <Typography variant="subtitle2" gutterBottom color="secondary.light" sx={{ fontWeight: 'bold' }}>
-            BRAIN {brain2.id + 1} DETAILS
+          <Typography variant="subtitle2" gutterBottom sx={{ 
+            fontWeight: 'bold',
+            color: '#ff6ec7',
+            letterSpacing: '1px',
+            textTransform: 'uppercase',
+            display: 'flex',
+            alignItems: 'center'
+          }}>
+            <BiotechIcon fontSize="small" sx={{ mr: 1 }} />
+            Neural Unit {brain2.id + 1}
           </Typography>
-          <BrainDetails brain={brain2} stats={safeStats2} />
+          <Fade in={true} timeout={1000}>
+            <Box>
+              <BrainDetails brain={brain2} stats={safeStats2} />
+            </Box>
+          </Fade>
         </>
       )}
       
       {/* Configuration Info */}
-      <Accordion 
-        disableGutters 
-        elevation={1} 
-        sx={{ 
-          mt: 2,
-          backgroundColor: 'rgba(30, 30, 70, 0.4)', 
-          '&:before': { display: 'none' }
-        }}
-      >
-        <AccordionSummary 
-          expandIcon={<ExpandMoreIcon />}
-          sx={{ backgroundColor: 'rgba(40, 40, 80, 0.4)' }}
+      <GlowingCard borderColor="#9d4edd">
+        <Accordion 
+          disableGutters 
+          elevation={0} 
+          sx={{ 
+            backgroundColor: 'transparent',
+            '&:before': { display: 'none' },
+            boxShadow: 'none'
+          }}
         >
-          <SettingsIcon fontSize="small" sx={{ mr: 1 }} />
-          <Typography variant="body2">Device Configuration</Typography>
-        </AccordionSummary>
-        <AccordionDetails>
-          <Grid container spacing={1}>
-            <Grid item xs={6}>
-              <Typography variant="caption" color="text.secondary">Sample Rate:</Typography>
-              <Typography variant="body2">{getSampleRateLabel(brain1?.sampleRate || 8)}</Typography>
+          <AccordionSummary 
+            expandIcon={<ExpandMoreIcon sx={{ color: '#9d4edd' }} />}
+            sx={{ 
+              p: 0,
+              minHeight: 'unset',
+              '& .MuiAccordionSummary-content': {
+                margin: 0,
+                alignItems: 'center'
+              }
+            }}
+          >
+            <SettingsIcon fontSize="small" sx={{ mr: 1, color: '#9d4edd' }} />
+            <Typography variant="body2" sx={{ color: '#c77dff', fontWeight: 'bold' }}>
+              Device Configuration
+            </Typography>
+          </AccordionSummary>
+          <AccordionDetails sx={{ p: 0, pt: 2 }}>
+            <Grid container spacing={1.5}>
+              <Grid item xs={6}>
+                <Box sx={{ 
+                  background: 'rgba(40, 25, 70, 0.3)',
+                  borderRadius: '8px',
+                  p: 1.5,
+                  border: '1px solid rgba(157, 77, 221, 0.3)',
+                  height: '100%'
+                }}>
+                  <Typography variant="caption" sx={{ color: '#b39ddb', display: 'block', mb: 0.5 }}>
+                    Sample Rate
+                  </Typography>
+                  <Typography variant="body2" sx={{ 
+                    fontWeight: 'bold',
+                    color: '#e0d6ff',
+                    fontSize: '1.1rem'
+                  }}>
+                    {getSampleRateLabel(brain1?.sampleRate || 8)}
+                  </Typography>
+                </Box>
+              </Grid>
+              <Grid item xs={6}>
+                <Box sx={{ 
+                  background: 'rgba(40, 25, 70, 0.3)',
+                  borderRadius: '8px',
+                  p: 1.5,
+                  border: '1px solid rgba(157, 77, 221, 0.3)',
+                  height: '100%'
+                }}>
+                  <Typography variant="caption" sx={{ color: '#b39ddb', display: 'block', mb: 0.5 }}>
+                    Sample Depth
+                  </Typography>
+                  <Typography variant="body2" sx={{ 
+                    fontWeight: 'bold',
+                    color: '#e0d6ff',
+                    fontSize: '1.1rem'
+                  }}>
+                    {formatNumber(brain1?.sampleDepth || 200000)}
+                  </Typography>
+                </Box>
+              </Grid>
+              <Grid item xs={6}>
+                <Box sx={{ 
+                  background: 'rgba(40, 25, 70, 0.3)',
+                  borderRadius: '8px',
+                  p: 1.5,
+                  border: '1px solid rgba(157, 77, 221, 0.3)',
+                  height: '100%'
+                }}>
+                  <Typography variant="caption" sx={{ color: '#b39ddb', display: 'block', mb: 0.5 }}>
+                    Scan Interval
+                  </Typography>
+                  <Typography variant="body2" sx={{ 
+                    fontWeight: 'bold',
+                    color: '#e0d6ff',
+                    fontSize: '1.1rem'
+                  }}>
+                    {brain1?.scanInterval || 100}ms
+                  </Typography>
+                </Box>
+              </Grid>
+              <Grid item xs={6}>
+                <Box sx={{ 
+                  background: 'rgba(40, 25, 70, 0.3)',
+                  borderRadius: '8px',
+                  p: 1.5,
+                  border: '1px solid rgba(157, 77, 221, 0.3)',
+                  height: '100%'
+                }}>
+                  <Typography variant="caption" sx={{ color: '#b39ddb', display: 'block', mb: 0.5 }}>
+                    Voltage Threshold
+                  </Typography>
+                  <Typography variant="body2" sx={{ 
+                    fontWeight: 'bold',
+                    color: '#e0d6ff',
+                    fontSize: '1.1rem'
+                  }}>
+                    {brain1?.voltageThreshold || 0.98}V
+                  </Typography>
+                </Box>
+              </Grid>
             </Grid>
-            <Grid item xs={6}>
-              <Typography variant="caption" color="text.secondary">Sample Depth:</Typography>
-              <Typography variant="body2">{formatNumber(brain1?.sampleDepth || 200000)}</Typography>
-            </Grid>
-            <Grid item xs={6}>
-              <Typography variant="caption" color="text.secondary">Scan Interval:</Typography>
-              <Typography variant="body2">{brain1?.scanInterval || 100}ms</Typography>
-            </Grid>
-            <Grid item xs={6}>
-              <Typography variant="caption" color="text.secondary">Voltage Threshold:</Typography>
-              <Typography variant="body2">{brain1?.voltageThreshold || 0.98}V</Typography>
-            </Grid>
-          </Grid>
-        </AccordionDetails>
-      </Accordion>
+          </AccordionDetails>
+        </Accordion>
+      </GlowingCard>
       
-      <Box sx={{ mt: 3 }}>
-        <Typography variant="caption" color="text.disabled" sx={{ display: 'block', textAlign: 'center', mb: 1 }}>
+      <Box sx={{ 
+        mt: 3, 
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center'
+      }}>
+        <Chip 
+          label="SYSTEM NOMINAL" 
+          size="small"
+          sx={{ 
+            background: 'linear-gradient(90deg, rgba(0, 230, 118, 0.2), rgba(0, 230, 118, 0.1))',
+            border: '1px solid rgba(0, 230, 118, 0.4)',
+            color: '#00e676',
+            fontWeight: 'bold',
+            fontSize: '0.7rem',
+            letterSpacing: '0.5px'
+          }}
+        />
+        <Typography variant="caption" sx={{ 
+          color: '#8090ff',
+          fontWeight: 'bold',
+          letterSpacing: '0.5px'
+        }}>
           Last Updated: {new Date().toLocaleTimeString()}
         </Typography>
       </Box>

@@ -1,4 +1,4 @@
-// TimeSlicedBrainView.js - Working version with proper animation
+// TimeSlicedBrainView.js - Futuristic visual update, layout unchanged
 
 import React, { memo, useMemo, useRef, useState, useEffect } from "react";
 import { Box, Typography, Grid, Divider, Paper } from "@mui/material";
@@ -6,7 +6,6 @@ import BrainVisualization from "./BrainVisualization";
 
 // Simple time scale component
 const TimeScale = memo(({ timeSlices, scanInterval }) => {
-  // Calculate the total width based on the number of slices
   const totalMs = scanInterval || 100;
   const tickPoints = [0, 20, 40, 60, 80, 100];
 
@@ -14,19 +13,20 @@ const TimeScale = memo(({ timeSlices, scanInterval }) => {
     <Box
       sx={{
         width: "100%",
-        height: 20, // Reduced height
+        height: 20,
         position: "relative",
-        mb: 0.5, // Reduced margin
+        mb: 0.5,
         mt: 0.5,
         px: 1,
       }}
     >
-      {/* Horizontal line */}
+      {/* Glowing horizontal line */}
       <Box
         sx={{
           position: "absolute",
           height: "1px",
-          backgroundColor: "rgba(255,255,255,0.3)",
+          background: "linear-gradient(90deg, #00f2ff, #8e2de2)",
+          opacity: 0.5,
           width: "calc(100% - 10px)",
           top: 10,
           left: 5,
@@ -35,7 +35,6 @@ const TimeScale = memo(({ timeSlices, scanInterval }) => {
 
       {/* Time ticks */}
       {tickPoints.map((percentage, index) => {
-        
         const msValue = Math.round((percentage / 100) * totalMs);
 
         return (
@@ -47,7 +46,8 @@ const TimeScale = memo(({ timeSlices, scanInterval }) => {
               top: 5,
               height: 10,
               width: "2px",
-              backgroundColor: "rgba(255,255,255,0.5)",
+              backgroundColor: "rgba(0, 255, 255, 0.6)",
+              boxShadow: "0 0 3px #00ffff",
             }}
           >
             <Typography
@@ -56,7 +56,7 @@ const TimeScale = memo(({ timeSlices, scanInterval }) => {
                 position: "absolute",
                 left: -15,
                 top: 11,
-                color: "rgba(255,255,255,0.7)",
+                color: "#a0f0ff",
                 fontSize: "0.6rem",
                 width: 30,
                 textAlign: "center",
@@ -75,7 +75,7 @@ const TimeScale = memo(({ timeSlices, scanInterval }) => {
           position: "absolute",
           right: 0,
           top: 0,
-          color: "rgba(255,255,255,0.7)",
+          color: "#a0f0ff",
           fontSize: "0.6rem",
         }}
       >
@@ -86,91 +86,98 @@ const TimeScale = memo(({ timeSlices, scanInterval }) => {
 });
 
 // Individual brain visualization
-const TimeSliceBrain = memo(
-  ({ brain, channels, sliceIndex, sharedPulseTime }) => {
-    const canvasRef = useRef(null);
+const TimeSliceBrain = memo(({ brain, channels, sliceIndex, sharedPulseTime }) => {
+  const canvasRef = useRef(null);
 
-    // Calculate transitions for this time slice
-    const transitions = useMemo(
-      () => channels?.reduce((sum, ch) => sum + (ch.transitions || 0), 0) || 0,
-      [channels]
-    );
+  const transitions = useMemo(
+    () => channels?.reduce((sum, ch) => sum + (ch.transitions || 0), 0) || 0,
+    [channels]
+  );
 
-    return (
-      <Paper
-        elevation={3}
+  return (
+    <Paper
+      elevation={3}
+      sx={{
+        height: "100%",
+        width: "100%",
+        background: "radial-gradient(circle, rgba(15,15,35,0.85) 0%, rgba(5,5,20,0.95) 100%)",
+        borderRadius: "4px",
+        position: "relative",
+        padding: "2px",
+        overflow: "hidden",
+        border: "1px solid rgba(0, 255, 255, 0.15)",
+        boxShadow: "0 0 8px rgba(0, 255, 255, 0.2)",
+        transition: "transform 0.3s ease",
+        "&:hover": {
+          transform: "scale(1.01)",
+          boxShadow: "0 0 10px rgba(0, 255, 255, 0.4)",
+        },
+      }}
+    >
+      {/* Slice number */}
+      <Box
         sx={{
-          height: "100%",
-          width: "100%",
-          backgroundColor: "rgba(15, 15, 35, 0.7)",
-          borderRadius: "4px",
-          position: "relative",
-          padding: "2px", // Reduced padding
-          overflow: "hidden",
+          position: "absolute",
+          top: 3,
+          left: 3,
+          zIndex: 10,
+          backgroundColor: "rgba(0,0,0,0.6)",
+          color: "#00f2ff",
+          padding: "1px 4px",
+          borderRadius: "3px",
+          fontSize: "0.65rem",
+          fontWeight: "bold",
+          textShadow: "0 0 2px #00ffff",
         }}
       >
-        {/* Slice number label */}
-        <Box
-          sx={{
-            position: "absolute",
-            top: 3,
-            left: 3,
-            zIndex: 10,
-            backgroundColor: "rgba(0,0,0,0.6)",
-            color: "white",
-            padding: "1px 4px",
-            borderRadius: "3px",
-            fontSize: "0.65rem",
-          }}
-        >
-          {sliceIndex + 1}
-        </Box>
+        {sliceIndex + 1}
+      </Box>
 
-        {/* Transitions counter */}
-        <Box
-          sx={{
-            position: "absolute",
-            bottom: 3,
-            right: 3,
-            zIndex: 10,
-            backgroundColor: "rgba(0,0,0,0.6)",
-            color: "white",
-            borderRadius: "3px",
-            padding: "1px 4px",
-            fontSize: "0.65rem",
-          }}
-        >
-          {transitions}
-        </Box>
+      {/* Transition count */}
+      <Box
+        sx={{
+          position: "absolute",
+          bottom: 3,
+          right: 3,
+          zIndex: 10,
+          backgroundColor: "rgba(0,0,0,0.6)",
+          color: "#8e2de2",
+          borderRadius: "3px",
+          padding: "1px 4px",
+          fontSize: "0.65rem",
+          fontWeight: "bold",
+          textShadow: "0 0 2px #8e2de2",
+        }}
+      >
+        {transitions}
+      </Box>
 
-        {/* Brain visualization */}
-        <Box
-          sx={{
-            width: "100%",
-            height: "100%",
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "center",
+      <Box
+        sx={{
+          width: "100%",
+          height: "100%",
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+        }}
+      >
+        <BrainVisualization
+          brainId={brain?.id || 0}
+          brainData={{
+            isActive: true,
+            channels: channels || [],
+            serialNumber: brain?.serialNumber || "Unknown",
+            model: brain?.model || "Unknown",
+            captureCount: brain?.captureCount || 0,
           }}
-        >
-          <BrainVisualization
-            brainId={brain?.id || 0}
-            brainData={{
-              isActive: true, // Always show as active
-              channels: channels || [],
-              serialNumber: brain?.serialNumber || "Unknown",
-              model: brain?.model || "Unknown",
-              captureCount: brain?.captureCount || 0,
-            }}
-            pulseTime={sharedPulseTime + sliceIndex * 0.2} // Use shared pulse time with offset
-            showNoActivity={false}
-            canvasRef={canvasRef}
-          />
-        </Box>
-      </Paper>
-    );
-  }
-);
+          pulseTime={sharedPulseTime + sliceIndex * 0.2}
+          showNoActivity={false}
+          canvasRef={canvasRef}
+        />
+      </Box>
+    </Paper>
+  );
+});
 
 // Main component
 const TimeSlicedBrainView = ({
@@ -181,16 +188,13 @@ const TimeSlicedBrainView = ({
   settings,
   updateKey,
 }) => {
-  // Shared pulse time state for continuous animation
   const [pulseTime, setPulseTime] = useState(0);
   const requestRef = useRef(null);
   const previousTimeRef = useRef(0);
 
-  // Animation loop for continuous pulse
   useEffect(() => {
     const animate = (time) => {
       if (previousTimeRef.current !== undefined) {
-        // Update pulseTime by small increment each frame - SAME AS MultiBrainDashboard
         setPulseTime((prevPulseTime) => prevPulseTime + 0.02);
       }
       previousTimeRef.current = time;
@@ -203,7 +207,6 @@ const TimeSlicedBrainView = ({
     };
   }, []);
 
-  // Safely generate time-sliced data for both brains
   const brain1SliceData = useMemo(() => {
     if (!brain1 || !timeSlices) return Array(timeSlices?.length || 5).fill([]);
     return timeSlices.map((slice, index) =>
@@ -218,7 +221,6 @@ const TimeSlicedBrainView = ({
     );
   }, [brain2, timeSlices, generateSliceData, updateKey]);
 
-  // Safe counts of active channels
   const brain1ActiveChannels = useMemo(
     () =>
       brain1?.channels?.filter(
@@ -235,14 +237,11 @@ const TimeSlicedBrainView = ({
     [brain2]
   );
 
-  // Get scan intervals
   const scanInterval1 = brain1?.scanInterval || 100;
   const scanInterval2 = brain2?.scanInterval || 100;
 
-  // Default timeSlices if not provided
   const defaultTimeSlices = useMemo(() => {
     if (timeSlices && timeSlices.length > 0) return timeSlices;
-
     const interval = scanInterval1;
     const sliceSize = interval / 5;
     return Array.from({ length: 5 }, (_, i) => ({
@@ -256,7 +255,6 @@ const TimeSlicedBrainView = ({
 
   return (
     <Box sx={{ height: "100%", display: "flex", flexDirection: "column" }}>
-      {/* Title */}
       <Box
         sx={{
           display: "flex",
@@ -278,7 +276,7 @@ const TimeSlicedBrainView = ({
         </Typography>
       </Box>
 
-      {/* Brain 1 Row */}
+      {/* Brain 1 */}
       <Box sx={{ mb: 0.5 }}>
         <Box
           sx={{
@@ -326,20 +324,15 @@ const TimeSlicedBrainView = ({
           )}
         </Box>
 
-        {/* Time scale for Brain 1 */}
-        <TimeScale
-          timeSlices={defaultTimeSlices}
-          scanInterval={scanInterval1}
-        />
+        <TimeScale timeSlices={defaultTimeSlices} scanInterval={scanInterval1} />
 
-        {/* Brain visualizations */}
         <Box sx={{ height: "200px" }}>
           <Grid
             container
             spacing={1}
             sx={{
               height: "100%",
-              flexWrap: "nowrap", // Prevent wrapping
+              flexWrap: "nowrap",
               justifyContent: "space-between",
             }}
           >
@@ -349,12 +342,12 @@ const TimeSlicedBrainView = ({
                 xs={12 / 5}
                 key={idx}
                 sx={{
-                  flex: "1 0 18%", // Distribute space evenly
-                  maxWidth: "20%", // Max 5 per row
+                  flex: "1 0 18%",
+                  maxWidth: "20%",
                   height: "100%",
-                  minWidth: 150, // Minimum width
+                  minWidth: 150,
                   position: "relative",
-                  mt:3
+                  mt: 3,
                 }}
               >
                 <TimeSliceBrain
@@ -371,7 +364,7 @@ const TimeSlicedBrainView = ({
 
       <Divider sx={{ my: 0.5, borderColor: "rgba(100, 100, 255, 0.2)" }} />
 
-      {/* Brain 2 Row */}
+      {/* Brain 2 */}
       <Box sx={{ mt: 4 }}>
         <Box
           sx={{
@@ -419,20 +412,15 @@ const TimeSlicedBrainView = ({
           )}
         </Box>
 
-        {/* Time scale for Brain 2 */}
-        <TimeScale
-          timeSlices={defaultTimeSlices}
-          scanInterval={scanInterval2}
-        />
+        <TimeScale timeSlices={defaultTimeSlices} scanInterval={scanInterval2} />
 
-        {/* Brain visualizations */}
         <Box sx={{ height: "200px" }}>
           <Grid
             container
             spacing={1}
             sx={{
               height: "100%",
-              flexWrap: "nowrap", // Prevent wrapping
+              flexWrap: "nowrap",
               justifyContent: "space-between",
               mt: 3,
             }}
@@ -443,10 +431,10 @@ const TimeSlicedBrainView = ({
                 xs={12 / 5}
                 key={idx}
                 sx={{
-                  flex: "1 0 18%", // Distribute space evenly
-                  maxWidth: "20%", // Max 5 per row
+                  flex: "1 0 18%",
+                  maxWidth: "20%",
                   height: "100%",
-                  minWidth: 150, // Minimum width
+                  minWidth: 150,
                   position: "relative",
                 }}
               >
