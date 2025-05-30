@@ -7,15 +7,30 @@ export const TEMPLATE_MAX_X = 55;
 export const TEMPLATE_MIN_Y = 24; 
 export const TEMPLATE_MAX_Y = 86;
 
-// Enhanced colormap specifically for transitions
-// Focus on showing high transitions as red, with a gradual transition
+// Enhanced colormap with 15+ colors for smoother transitions
 export const COLORMAP = [
-  [0, 0, 255],     // Blue (low activity)
+  [0, 0, 128],     // Navy (lowest activity)
+  [0, 0, 255],     // Blue
+  [0, 64, 255],    // Light blue
+  [0, 128, 255],   // Sky blue
+  [0, 192, 255],   // Azure
   [0, 255, 255],   // Cyan
+  [0, 255, 192],   // Aquamarine
+  [0, 255, 128],   // Light green
+  [0, 255, 64],    // Spring green
   [0, 255, 0],     // Green
+  [64, 255, 0],    // Chartreuse
+  [128, 255, 0],   // Lime green
+  [192, 255, 0],   // Yellow-green
   [255, 255, 0],   // Yellow
+  [255, 224, 0],   // Gold
+  [255, 192, 0],   // Amber
+  [255, 160, 0],   // Orange-yellow
   [255, 128, 0],   // Orange
-  [255, 0, 0]      // Red (high activity)
+  [255, 96, 0],    // Burnt orange
+  [255, 64, 0],    // Red-orange
+  [255, 32, 0],    // Vermilion
+  [255, 0, 0]      // Red (highest activity)
 ];
 
 // OPTIMIZATION: Pre-computed electrode positions to avoid recalculating
@@ -179,22 +194,37 @@ export function createBrainColors(brainId) {
   };
 }
 
-// Get color and size based on channel activity level
+// Get color and size based on channel activity level - Enhanced with more gradations
 export function getActivityColorAndSize(channel, colors) {
   if (!channel || channel.totalTransitions === 0) {
     return { color: colors.inactive, size: 2 };
   }
   
-  // Determine color based on activity level
-  // Ensure high transitions show as red
-  if (channel.totalTransitions > 100) {
-    return { color: colors.highActivity, size: 4 }; // Red for high activity
+  // Determine color based on activity level with more granular gradations
+  if (channel.totalTransitions > 150) {
+    return { color: colors.highActivity, size: 4.5 }; // Red for very high activity
+  } else if (channel.totalTransitions > 100) {
+    return { color: [255, 64, 0], size: 4 }; // Red-orange for high activity
+  } else if (channel.totalTransitions > 80) {
+    return { color: [255, 128, 0], size: 3.8 }; // Orange for medium-high activity
+  } else if (channel.totalTransitions > 60) {
+    return { color: [255, 192, 0], size: 3.6 }; // Yellow-orange for medium-high activity
   } else if (channel.totalTransitions > 50) {
-    return { color: colors.mediumActivity, size: 3.5 }; // Green for medium
+    return { color: [255, 255, 0], size: 3.5 }; // Yellow for medium activity
+  } else if (channel.totalTransitions > 40) {
+    return { color: [192, 255, 0], size: 3.4 }; // Yellow-green for medium-low activity
+  } else if (channel.totalTransitions > 30) {
+    return { color: [128, 255, 0], size: 3.3 }; // Lime green for medium-low activity
+  } else if (channel.totalTransitions > 20) {
+    return { color: [0, 255, 0], size: 3.2 }; // Green for low-medium activity
   } else if (channel.totalTransitions > 10) {
-    return { color: colors.lowActivity, size: 3 }; // Blue for low
+    return { color: [0, 192, 255], size: 3 }; // Sky blue for low activity
+  } else if (channel.totalTransitions > 5) {
+    return { color: [0, 128, 255], size: 2.8 }; // Light blue for very low activity
+  } else if (channel.totalTransitions > 0) {
+    return { color: [0, 64, 255], size: 2.6 }; // Blue for minimal activity
   } else {
-    return { color: colors.inactive, size: 2.5 }; // Gray for minimal
+    return { color: colors.inactive, size: 2.5 }; // Gray for no activity
   }
 }
 
@@ -244,7 +274,7 @@ export function getBrainMask(gridSize) {
   return mask;
 }
 
-// OPTIMIZATION: More efficient contour plotting function
+// OPTIMIZATION: More efficient contour plotting function with enhanced coloring
 export function drawAdvancedContourMap(ctx, channels, width, height, colors, outlineImg, isActive) {
   const centerX = width / 2;
   const centerY = height / 2;
@@ -265,8 +295,8 @@ export function drawAdvancedContourMap(ctx, channels, width, height, colors, out
     return;
   }
   
-  // OPTIMIZATION: Reduced grid size for better performance while maintaining visuals
-  const gridSize = 60;
+  // OPTIMIZATION: Increased grid size for better visual fidelity
+  const gridSize = 80; // Increased from 60 for smoother contours
   
   // Get brain mask from cache
   const brainMask = getBrainMask(gridSize);
@@ -322,15 +352,19 @@ export function drawAdvancedContourMap(ctx, channels, width, height, colors, out
   }
   
   // Add corner points to improve interpolation at edges
-  // OPTIMIZATION: Only use 4 corner points instead of 8
+  // Enhanced with more border points for smoother edges
   const corners = [
-    [0, 0], [0, 4], [4, 0], [4, 4]
+    [0, 0], [1, 0], [2, 0], [3, 0], [4, 0],
+    [0, 1], [4, 1],
+    [0, 2], [4, 2],
+    [0, 3], [4, 3],
+    [0, 4], [1, 4], [2, 4], [3, 4], [4, 4]
   ];
   
   for (const [cx, cy] of corners) {
     x.push(cx);
     y.push(cy);
-    z.push(avgActivity * 0.8); // Slightly reduce activity at edges
+    z.push(avgActivity * 0.6); // Slightly reduce activity at edges for better gradient transition
   }
   
   // OPTIMIZATION: Use typed arrays for better performance
@@ -349,7 +383,7 @@ export function drawAdvancedContourMap(ctx, channels, width, height, colors, out
   const distances = new Float32Array(x.length);
   const weights = new Float32Array(x.length);
   
-  // Simple inverse distance weighting interpolation
+  // Enhanced inverse distance weighting interpolation for smoother results
   for (let j = 0; j < gridSize; j++) {
     const gy = gyValues[j];
     
@@ -384,8 +418,8 @@ export function drawAdvancedContourMap(ctx, channels, width, height, colors, out
         }
         
         distances[k] = dist;
-        // Modified power for stronger interpolation effect
-        const weight = 1 / (dist * dist);
+        // Modified power for stronger interpolation effect (increased from 2 to 2.5)
+        const weight = 1 / Math.pow(dist, 2.5);
         weights[k] = weight;
         weightSum += weight;
         valueSum += z[k] * weight;
@@ -409,7 +443,7 @@ export function drawAdvancedContourMap(ctx, channels, width, height, colors, out
   }
   
   // Apply contrast enhancement
-  const contrast = 2.0; // Stronger contrast
+  const contrast = 2.2; // Stronger contrast for more vibrant visualization
   const ziRange = Math.max(0.1, ziMax - ziMin); // Avoid division by zero
   
   // Create a temporary canvas for the contour
@@ -440,12 +474,13 @@ export function drawAdvancedContourMap(ctx, channels, width, height, colors, out
       let val = 0.5 + (normalizedVal - 0.5) * contrast;
       val = Math.max(0, Math.min(1, val)); // Clamp to 0-1
       
-      // --- SMOOTH COLOR INTERPOLATION ---
+      // --- SMOOTH COLOR INTERPOLATION with enhanced colormap ---
+      // Use enhanced colormap with more color stops for smoother transitions
       const scaled = val * (COLORMAP.length - 1);
-      const idx = Math.floor(scaled);
+      const idx = Math.min(Math.floor(scaled), COLORMAP.length - 2);
       const frac = scaled - idx;
       const colorA = COLORMAP[idx];
-      const colorB = COLORMAP[Math.min(idx + 1, COLORMAP.length - 1)];
+      const colorB = COLORMAP[idx + 1];
       const color = lerpColor(colorA, colorB, frac);
 
       // Set pixel color
@@ -507,6 +542,15 @@ export function drawAdvancedContourMap(ctx, channels, width, height, colors, out
     // Step 6: Draw the final masked result to the main canvas
     ctx.drawImage(maskCanvas, brainX, brainY);
     
+    // Add subtle glow effect for active brains
+    if (isActive && activeCount > 0) {
+      ctx.save();
+      ctx.globalAlpha = 0.15;
+      ctx.filter = 'blur(8px)';
+      ctx.drawImage(maskCanvas, brainX, brainY);
+      ctx.restore();
+    }
+    
     // Optional: Draw a subtle brain outline
     ctx.strokeStyle = `rgba(${colors.brainOutline[0]}, ${colors.brainOutline[1]}, ${colors.brainOutline[2]}, 0.5)`;
     ctx.lineWidth = 1;
@@ -517,7 +561,6 @@ export function drawAdvancedContourMap(ctx, channels, width, height, colors, out
   }
 }
 
-// Function to parse the logic data file
 // Function to parse the logic data file
 export async function parseLogicData(filePath) {
   try {
@@ -608,6 +651,7 @@ export async function parseLogicData(filePath) {
     return null;
   }
 }
+
 // Get brain data for a specific brain from parsed data
 export function getBrainData(brainData, brainId) {
   if (!brainData || brainData.length === 0) {

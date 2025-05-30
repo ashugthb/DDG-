@@ -105,17 +105,34 @@ const DEFAULT_DEVICE_SETTINGS = {
 };
 
 // Generate default settings for all devices
+// Update in SettingsDialog.js - Fix the field names to match C++ expectations
 const generateDefaultSettings = () => ({
-  dataFilePath: '/data/logic_data.txt',
-  updateInterval: 1500, // 1.5 seconds
+  dataFilePath: 'C:\\Ashvajeet\\FULL_Setup\\brain-viz\\public\\data\\logic_data.txt',
+  updateIntervalMs: 1500, // Changed from updateInterval to updateIntervalMs
+  showInactiveOverlay: true,
+  useGroupedConnection: true,
+  groupSwitchDelayMs: 500,
+  groupSize: 6,
   
-  // Device settings - 12 devices with LA1-LA12 naming
+  // Add default device settings with correct C++ field names
+  defaultSampleRate: 8,
+  defaultSampleDepth: 200000,
+  defaultScanInterval: 100,
+  defaultVoltageThreshold: 0.98,
+  defaultEnableTrigger: false,
+  defaultTriggerChannel: 0,
+  defaultTriggerRisingEdge: true,
+  
+  // Device settings
   deviceSettings: Array.from({ length: 12 }, (_, index) => ({
-    ...DEFAULT_DEVICE_SETTINGS,
+    enabled: true,
     name: `LA${index + 1}`,
+    sampleRateCode: 8, // Changed from sampleRate to sampleRateCode
+    sampleDepth: 200000,
+    scanIntervalMs: 100, // Changed from scanInterval to scanIntervalMs
+    voltageThreshold: 0.98 // Added to match C++ expectations
   }))
 });
-
 // Device status chip component
 const DeviceStatusChip = memo(({ status, lastScanTime }) => {
   let chipProps = {
@@ -199,8 +216,8 @@ const DeviceSettingCard = memo(({ device, index, onChange }) => {
           <FormControl fullWidth disabled={!device.enabled} size="small">
             <InputLabel>Sample Rate</InputLabel>
             <Select
-              value={device.sampleRate !== undefined ? device.sampleRate : 8}
-              onChange={(e) => onChange(index, 'sampleRate', e.target.value)}
+              value={device.sampleRateCode  !== undefined ? device.sampleRateCode  : 8}
+              onChange={(e) => onChange(index, 'sampleRateCode', e.target.value)}
               label="Sample Rate"
               startAdornment={
                 <InputAdornment position="start">
@@ -243,8 +260,8 @@ const DeviceSettingCard = memo(({ device, index, onChange }) => {
           <FormControl fullWidth disabled={!device.enabled} size="small">
             <InputLabel>Scan Interval</InputLabel>
             <Select
-              value={device.scanInterval !== undefined ? device.scanInterval : 100}
-              onChange={(e) => onChange(index, 'scanInterval', e.target.value)}
+              value={device.scanIntervalMs  !== undefined ? device.scanIntervalMs  : 100}
+              onChange={(e) => onChange(index, 'scanIntervalMs', e.target.value)}
               label="Scan Interval"
               startAdornment={
                 <InputAdornment position="start">
@@ -259,6 +276,28 @@ const DeviceSettingCard = memo(({ device, index, onChange }) => {
               ))}
             </Select>
           </FormControl>
+        </Grid>
+         <Grid item xs={12} sm={6} md={3}>
+          <TextField
+            fullWidth
+            type="number"
+            label="Voltage Threshold"
+            value={device.voltageThreshold || 0.98}
+            onChange={(e) => onChange(index, 'voltageThreshold', parseFloat(e.target.value))}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <Tooltip title="Voltage threshold">
+                    <TuneIcon fontSize="small" />
+                  </Tooltip>
+                </InputAdornment>
+              ),
+              endAdornment: <InputAdornment position="end">V</InputAdornment>,
+            }}
+            disabled={!device.enabled}
+            size="small"
+            inputProps={{ step: 0.1, min: 0.5, max: 5.0 }}
+          />
         </Grid>
       </Grid>
     </Paper>
@@ -348,7 +387,7 @@ const SettingsDialog = ({ open, onClose, settings, onSettingsChange }) => {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          filePath: '/public/data/analyzer_config.json',
+          filePath: 'C:/Ashvajeet/FULL_Setup/brain-viz/public/data/analyzer_config.json',
           content: configContent
         }),
       });
@@ -567,8 +606,8 @@ const SettingsDialog = ({ open, onClose, settings, onSettingsChange }) => {
                     fullWidth
                     type="number"
                     label="Update Interval"
-                    value={tempSettings.updateInterval}
-                    onChange={(e) => setTempSettings(prev => ({ ...prev, updateInterval: parseInt(e.target.value) || 1500 }))}
+                    value={tempSettings.updateIntervalMs}
+                    onChange={(e) => setTempSettings(prev => ({ ...prev, updateIntervalMs: parseInt(e.target.value) || 1500 }))}
                     InputProps={{
                       endAdornment: <InputAdornment position="end">ms</InputAdornment>,
                     }}
