@@ -27,6 +27,7 @@ import SpeedIcon from '@mui/icons-material/Speed';
 import TimeSlicedBrainView from './TimeSlicedBrainView';
 import BrainDiagnosticsPanel from './BrainDiagnosticsPanel';
 import FrequencyAnalysisGraph from './FrequencyAnalysisGraph';
+import { getBrainData } from "../utils/brainUtils";
 
 // Main component
 const BrainPairDetailView = ({ 
@@ -97,34 +98,47 @@ const BrainPairDetailView = ({
   
   // Generate time-sliced data from the actual brain data
   // This is a deterministic modification based on the time slice
-  const generateSliceData = useCallback((brain, timeSlice, sliceIndex) => {
-    if (!brain || !brain.channels) return [];
-    
-    // Create a modified copy of the brain's channels based on slice index
-    return brain.channels.map(channel => {
-      // Simple mathematical pattern based on slice index and channel number
-      // This creates a wave-like pattern that's different for each slice
-      const wavePosition = Math.sin((channel.channel / 12) * Math.PI + (sliceIndex / 5) * Math.PI);
-      const activityFactor = 0.5 + 0.5 * wavePosition;
-      
-      // Make changes more pronounced to ensure visible differences
-      const scaleTransitions = Math.max(0, Math.floor(channel.transitions * activityFactor * 1.5));
-      const scaleActivity = Math.max(0, Math.floor(channel.activity * activityFactor * 1.5));
-      const scaleTotalTransitions = Math.max(1, Math.floor(channel.totalTransitions * activityFactor * 1.2));
-      
-      // Mark channels as changed based on a pattern
-      const isChangedInSlice = (channel.channel + sliceIndex) % 4 === 0;
-      
-      return {
-        ...channel,
-        transitions: scaleTransitions,
-        activity: scaleActivity,
-        totalTransitions: scaleTotalTransitions,
-        changed: channel.changed || isChangedInSlice
-      };
-    });
-  }, []);
+  // Generate time-sliced data from the actual brain data
+const generateSliceData = useCallback((brain, timeSlice, sliceIndex) => {
+  if (!brain || !brain.channels) return [];
   
+  // Find the corresponding brain data in allBrainData
+  let channelsToUse = brain.channels;
+  
+  if (allBrainData && brain.id !== undefined) {
+    // Extract brain data from allBrainData using the utility function
+    const brainData = getBrainData(allBrainData, brain.id);
+    
+    // Use the channels from this data if available
+    if (brainData && brainData.channels) {
+      channelsToUse = brainData.channels;
+    }
+  }
+
+  // Create time-sliced data based on the actual channels data
+  return channelsToUse.map(channel => {
+    // Simple mathematical pattern based on slice index and channel number
+    // This creates a wave-like pattern that's different for each slice
+    const wavePosition = Math.sin((channel.channel / 12) * Math.PI + (sliceIndex / 5) * Math.PI);
+    const activityFactor = 0.5 + 0.5 * wavePosition;
+    
+    // Make changes more pronounced to ensure visible differences
+    const scaleTransitions = Math.max(0, Math.floor(channel.transitions * activityFactor * 1.5));
+    const scaleActivity = Math.max(0, Math.floor(channel.activity * activityFactor * 1.5));
+    const scaleTotalTransitions = Math.max(1, Math.floor(channel.totalTransitions * activityFactor * 1.2));
+    
+    // Mark channels as changed based on a pattern
+    const isChangedInSlice = (channel.channel + sliceIndex) % 4 === 0;
+    
+    return {
+      ...channel,
+      transitions: scaleTransitions,
+      activity: scaleActivity,
+      totalTransitions: scaleTotalTransitions,
+      changed: channel.changed || isChangedInSlice
+    };
+  });
+}, [allBrainData]); // Add allBrainData to the dependency array
   // Toggle update speed
   const toggleUpdateSpeed = useCallback(() => {
     setUpdateSpeed(prevSpeed => {

@@ -1,4 +1,4 @@
-// SettingsDialog.js - With direct file saving to server
+// SettingsDialog.js - With direct file saving to server and loading from server
 
 import React, { useState, useEffect, memo } from 'react';
 import { 
@@ -43,6 +43,8 @@ import CloseIcon from '@mui/icons-material/Close';
 import HelpIcon from '@mui/icons-material/Help';
 import DevicesIcon from '@mui/icons-material/Devices';
 import StorageIcon from '@mui/icons-material/Storage';
+import CloudDownloadIcon from '@mui/icons-material/CloudDownload';
+import RefreshIcon from '@mui/icons-material/Refresh';
 
 // Sample rate options
 const SAMPLE_RATE_OPTIONS = [
@@ -98,10 +100,10 @@ const SCAN_INTERVAL_OPTIONS = [
 const DEFAULT_DEVICE_SETTINGS = {
   enabled: true,
   name: "LA", // Will be appended with number
-  sampleRate: 8, // 100MHz
+  sampleRateCode: 8, // 100MHz
   sampleDepth: 200000,
-  scanInterval: 100,
-  deviceId: '',
+  scanIntervalMs: 100,
+  voltageThreshold: 0.98,
 };
 
 // Generate default settings for all devices
@@ -133,6 +135,7 @@ const generateDefaultSettings = () => ({
     voltageThreshold: 0.98 // Added to match C++ expectations
   }))
 });
+
 // Device status chip component
 const DeviceStatusChip = memo(({ status, lastScanTime }) => {
   let chipProps = {
@@ -216,7 +219,7 @@ const DeviceSettingCard = memo(({ device, index, onChange }) => {
           <FormControl fullWidth disabled={!device.enabled} size="small">
             <InputLabel>Sample Rate</InputLabel>
             <Select
-              value={device.sampleRateCode  !== undefined ? device.sampleRateCode  : 8}
+              value={device.sampleRateCode !== undefined ? device.sampleRateCode : 8}
               onChange={(e) => onChange(index, 'sampleRateCode', e.target.value)}
               label="Sample Rate"
               startAdornment={
@@ -260,7 +263,7 @@ const DeviceSettingCard = memo(({ device, index, onChange }) => {
           <FormControl fullWidth disabled={!device.enabled} size="small">
             <InputLabel>Scan Interval</InputLabel>
             <Select
-              value={device.scanIntervalMs  !== undefined ? device.scanIntervalMs  : 100}
+              value={device.scanIntervalMs !== undefined ? device.scanIntervalMs : 100}
               onChange={(e) => onChange(index, 'scanIntervalMs', e.target.value)}
               label="Scan Interval"
               startAdornment={
@@ -311,21 +314,35 @@ const SettingsDialog = ({ open, onClose, settings, onSettingsChange }) => {
   const [saveError, setSaveError] = useState(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [activeTab, setActiveTab] = useState(0);
+  const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState(null);
+  const [configFile, setConfigFile] = useState(null);
   
-  // Initialize settings on open
-  useEffect(() => {
-    if (open) {
-      // Create a deep clone of the settings
-      let settingsCopy;
-      try {
-        settingsCopy = JSON.parse(JSON.stringify(settings));
-      } catch (err) {
-        console.error('Error parsing settings, using defaults:', err);
-        settingsCopy = generateDefaultSettings();
+  // Function to load configuration from server
+  const loadConfigFromServer = async () => {
+    try {
+      setLoading(true);
+      setLoadError(null);
+      
+      // Use fetch to load the file via an API endpoint
+      const response = await fetch('/api/load-config');
+      
+      if (!response.ok) {
+        throw new Error(`Failed to load configuration: ${response.statusText}`);
       }
       
+      const data = await response.json();
+      
+      if (!data.config) {
+        throw new Error('Invalid configuration data received');
+      }
+      
+      // Process the loaded configuration
+      const loadedConfig = data.config;
+      setConfigFile(loadedConfig);
+      
       // Ensure all devices have required properties
-      settingsCopy.deviceSettings = settingsCopy.deviceSettings.map((device, index) => {
+      loadedConfig.deviceSettings = loadedConfig.deviceSettings?.map((device, index) => {
         // Create device with defaults for any missing properties
         const defaultDevice = {
           ...DEFAULT_DEVICE_SETTINGS,
@@ -333,25 +350,82 @@ const SettingsDialog = ({ open, onClose, settings, onSettingsChange }) => {
         };
         
         return { ...defaultDevice, ...device };
-      });
+      }) || [];
       
       // Make sure we have exactly 12 devices
-      while (settingsCopy.deviceSettings.length < 12) {
-        const index = settingsCopy.deviceSettings.length;
-        settingsCopy.deviceSettings.push({
+      while (loadedConfig.deviceSettings.length < 12) {
+        const index = loadedConfig.deviceSettings.length;
+        loadedConfig.deviceSettings.push({
           ...DEFAULT_DEVICE_SETTINGS,
           name: `LA${index + 1}`,
         });
       }
       
       // Keep only the first 12 devices if there are more
-      if (settingsCopy.deviceSettings.length > 12) {
-        settingsCopy.deviceSettings = settingsCopy.deviceSettings.slice(0, 12);
+      if (loadedConfig.deviceSettings.length > 12) {
+        loadedConfig.deviceSettings = loadedConfig.deviceSettings.slice(0, 12);
       }
       
-      setTempSettings(settingsCopy);
-      setSaveError(null);
-      setSaveSuccess(false);
+      // Update temp settings with loaded configuration
+      setTempSettings(loadedConfig);
+      
+      console.log('Loaded configuration:', loadedConfig);
+      return loadedConfig;
+    } catch (error) {
+      console.error('Error loading configuration:', error);
+      setLoadError(error.message);
+      return null;
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  // Initialize settings on open
+  useEffect(() => {
+    if (open) {
+      // Load configuration from server
+      loadConfigFromServer().then(loadedConfig => {
+        if (!loadedConfig) {
+          // If loading failed, use the passed-in settings or defaults
+          let settingsCopy;
+          try {
+            settingsCopy = JSON.parse(JSON.stringify(settings));
+          } catch (err) {
+            console.error('Error parsing settings, using defaults:', err);
+            settingsCopy = generateDefaultSettings();
+          }
+          
+          // Ensure all devices have required properties
+          settingsCopy.deviceSettings = settingsCopy.deviceSettings.map((device, index) => {
+            // Create device with defaults for any missing properties
+            const defaultDevice = {
+              ...DEFAULT_DEVICE_SETTINGS,
+              name: `LA${index + 1}`,
+            };
+            
+            return { ...defaultDevice, ...device };
+          });
+          
+          // Make sure we have exactly 12 devices
+          while (settingsCopy.deviceSettings.length < 12) {
+            const index = settingsCopy.deviceSettings.length;
+            settingsCopy.deviceSettings.push({
+              ...DEFAULT_DEVICE_SETTINGS,
+              name: `LA${index + 1}`,
+            });
+          }
+          
+          // Keep only the first 12 devices if there are more
+          if (settingsCopy.deviceSettings.length > 12) {
+            settingsCopy.deviceSettings = settingsCopy.deviceSettings.slice(0, 12);
+          }
+          
+          setTempSettings(settingsCopy);
+        }
+        
+        setSaveError(null);
+        setSaveSuccess(false);
+      });
     }
   }, [settings, open]);
   
@@ -440,6 +514,27 @@ const SettingsDialog = ({ open, onClose, settings, onSettingsChange }) => {
     );
   };
   
+  // Show loading state while fetching configuration
+  if (loading && open) {
+    return (
+      <Dialog 
+        open={open} 
+        maxWidth="md" 
+        fullWidth
+      >
+        <DialogTitle>Loading Configuration</DialogTitle>
+        <DialogContent>
+          <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '200px' }}>
+            <CircularProgress />
+            <Typography variant="h6" sx={{ ml: 2 }}>
+              Loading device configuration...
+            </Typography>
+          </Box>
+        </DialogContent>
+      </Dialog>
+    );
+  }
+  
   return (
     <Dialog 
       open={open} 
@@ -467,11 +562,37 @@ const SettingsDialog = ({ open, onClose, settings, onSettingsChange }) => {
         <Box sx={{ display: 'flex', alignItems: 'center' }}>
           <SettingsIcon sx={{ color: 'primary.main', mr: 1 }} />
           <Typography variant="h6">Logic Analyzer Configuration</Typography>
+          {configFile && (
+            <Chip 
+              label="Config Loaded" 
+              color="success" 
+              size="small" 
+              icon={<CloudDownloadIcon />} 
+              sx={{ ml: 2 }}
+            />
+          )}
         </Box>
-        <IconButton edge="end" color="inherit" onClick={onClose} aria-label="close">
-          <CloseIcon />
-        </IconButton>
+        <Box>
+          <IconButton 
+            color="primary" 
+            onClick={loadConfigFromServer} 
+            disabled={loading} 
+            sx={{ mr: 1 }}
+            title="Reload configuration"
+          >
+            <RefreshIcon />
+          </IconButton>
+          <IconButton edge="end" color="inherit" onClick={onClose} aria-label="close">
+            <CloseIcon />
+          </IconButton>
+        </Box>
       </DialogTitle>
+      
+      {loadError && (
+        <Alert severity="error" sx={{ m: 2 }}>
+          Error loading configuration: {loadError}
+        </Alert>
+      )}
       
       <Box sx={{ display: 'flex', flexDirection: 'row', height: '100%', overflow: 'hidden' }}>
         {/* Tabs sidebar */}
@@ -628,6 +749,82 @@ const SettingsDialog = ({ open, onClose, settings, onSettingsChange }) => {
               <InfoIcon sx={{ mr: 1 }} />
               Configuration Information
             </Typography>
+            
+            {configFile && (
+              <Paper sx={{ p: 3, mb: 3, background: 'rgba(20,20,50,0.4)' }}>
+                <Typography variant="subtitle1" gutterBottom color="primary.main">
+                  Current Configuration Details
+                </Typography>
+                
+                <Grid container spacing={2} sx={{ mt: 2 }}>
+                  <Grid item xs={12} md={6}>
+                    <Paper sx={{ p: 2, background: 'rgba(30,30,70,0.4)' }}>
+                      <Typography variant="subtitle2" sx={{ mb: 1, color: 'primary.light', display: 'flex', alignItems: 'center' }}>
+                        <DevicesIcon fontSize="small" sx={{ mr: 1 }} />
+                        Device Status
+                      </Typography>
+                      <Typography variant="body2">
+                        Total Devices: {configFile.deviceSettings.length}
+                      </Typography>
+                      <Typography variant="body2">
+                        Enabled Devices: {configFile.deviceSettings.filter(d => d.enabled).length}
+                      </Typography>
+                    </Paper>
+                  </Grid>
+                  
+                  <Grid item xs={12} md={6}>
+                    <Paper sx={{ p: 2, background: 'rgba(30,30,70,0.4)' }}>
+                      <Typography variant="subtitle2" sx={{ mb: 1, color: 'primary.light', display: 'flex', alignItems: 'center' }}>
+                        <TuneIcon fontSize="small" sx={{ mr: 1 }} />
+                        Global Settings
+                      </Typography>
+                      <Typography variant="body2">
+                        Update Interval: {configFile.updateIntervalMs}ms
+                      </Typography>
+                      <Typography variant="body2">
+                        Group Connection: {configFile.useGroupedConnection ? 'Enabled' : 'Disabled'}
+                      </Typography>
+                    </Paper>
+                  </Grid>
+                </Grid>
+                
+                <Typography variant="subtitle1" gutterBottom sx={{ mt: 3, color: 'primary.light' }}>
+                  Device Summary
+                </Typography>
+                
+                <Grid container spacing={2} sx={{ mt: 1 }}>
+                  {configFile.deviceSettings.filter(d => d.enabled).slice(0, 6).map((device, idx) => (
+                    <Grid item xs={12} md={4} key={idx}>
+                      <Paper sx={{ p: 2, background: 'rgba(30,30,70,0.4)' }}>
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                          <Typography variant="subtitle2" color="primary.light">
+                            {device.name}
+                          </Typography>
+                          <Chip 
+                            label="Enabled" 
+                            size="small" 
+                            color="success" 
+                            variant="outlined"
+                          />
+                        </Box>
+                        <Typography variant="body2" sx={{ display: 'flex', alignItems: 'center', mb: 0.5 }}>
+                          <SpeedIcon fontSize="small" sx={{ mr: 1, opacity: 0.7 }} />
+                          {SAMPLE_RATE_OPTIONS.find(opt => opt.value === device.sampleRateCode)?.label || 'Unknown'}
+                        </Typography>
+                        <Typography variant="body2" sx={{ display: 'flex', alignItems: 'center', mb: 0.5 }}>
+                          <TimerIcon fontSize="small" sx={{ mr: 1, opacity: 0.7 }} />
+                          {device.scanIntervalMs}ms scan interval
+                        </Typography>
+                        <Typography variant="body2" sx={{ display: 'flex', alignItems: 'center' }}>
+                          <TuneIcon fontSize="small" sx={{ mr: 1, opacity: 0.7 }} />
+                          {device.voltageThreshold}V threshold
+                        </Typography>
+                      </Paper>
+                    </Grid>
+                  ))}
+                </Grid>
+              </Paper>
+            )}
             
             <Paper sx={{ p: 3, mb: 3, background: 'rgba(20,20,50,0.4)' }}>
               <Typography variant="subtitle1" gutterBottom>

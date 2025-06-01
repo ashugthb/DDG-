@@ -2,103 +2,112 @@
   "dataFilePath": "/data/logic_data.txt",
   "updateInterval": 1500,
   "showInactiveOverlay": true,
+  "useGroupedConnection": false,
+  "groupSwitchDelayMs": 500,
+  "groupSize": 6,
+  "defaultSampleRate": 8,
+  "defaultSampleDepth": 200000,
+  "defaultScanInterval": 100,
+  "defaultVoltageThreshold": 0.98,
+  "defaultEnableTrigger": false,
+  "defaultTriggerChannel": 0,
+  "defaultTriggerRisingEdge": true,
   "deviceSettings": [
     {
       "enabled": true,
       "name": "LA1",
-      "sampleRate": 8,
+      "sampleRateCode": 6,
       "sampleDepth": 200000,
-      "scanInterval": 100,
-      "deviceId": "",
-      "sampleRateCode": 7
+      "scanIntervalMs": 100,
+      "voltageThreshold": 0.98
     },
     {
       "enabled": true,
       "name": "LA2",
-      "sampleRate": 8,
+      "sampleRateCode": 8,
       "sampleDepth": 200000,
-      "scanInterval": 100,
-      "deviceId": ""
+      "scanIntervalMs": 100,
+      "voltageThreshold": 0.98
     },
     {
       "enabled": true,
       "name": "LA3",
-      "sampleRate": 8,
+      "sampleRateCode": 8,
       "sampleDepth": 200000,
-      "scanInterval": 100,
-      "deviceId": ""
+      "scanIntervalMs": 100,
+      "voltageThreshold": 0.98
     },
     {
       "enabled": true,
       "name": "LA4",
-      "sampleRate": 8,
+      "sampleRateCode": 8,
       "sampleDepth": 200000,
-      "scanInterval": 100,
-      "deviceId": ""
+      "scanIntervalMs": 100,
+      "voltageThreshold": 0.98
     },
     {
       "enabled": true,
       "name": "LA5",
-      "sampleRate": 8,
+      "sampleRateCode": 8,
       "sampleDepth": 200000,
-      "scanInterval": 100,
-      "deviceId": ""
+      "scanIntervalMs": 100,
+      "voltageThreshold": 0.98
     },
     {
       "enabled": true,
       "name": "LA6",
-      "sampleRate": 8,
+      "sampleRateCode": 8,
       "sampleDepth": 200000,
-      "scanInterval": 100,
-      "deviceId": ""
+      "scanIntervalMs": 100,
+      "voltageThreshold": 0.98
     },
     {
       "enabled": true,
       "name": "LA7",
-      "sampleRate": 8,
+      "sampleRateCode": 8,
       "sampleDepth": 200000,
-      "scanInterval": 100,
-      "deviceId": ""
+      "scanIntervalMs": 100,
+      "voltageThreshold": 0.98
     },
     {
       "enabled": true,
       "name": "LA8",
-      "sampleRate": 8,
+      "sampleRateCode": 8,
       "sampleDepth": 200000,
-      "scanInterval": 100,
-      "deviceId": ""
+      "scanIntervalMs": 100,
+      "voltageThreshold": 0.98
     },
     {
       "enabled": true,
       "name": "LA9",
-      "sampleRate": 8,
+      "sampleRateCode": 8,
       "sampleDepth": 200000,
-      "scanInterval": 100,
-      "deviceId": ""
+      "scanIntervalMs": 100,
+      "voltageThreshold": 0.98
     },
     {
       "enabled": true,
       "name": "LA10",
-      "sampleRate": 8,
+      "sampleRateCode": 8,
       "sampleDepth": 200000,
-      "scanInterval": 100,
-      "deviceId": ""
+      "scanIntervalMs": 100,
+      "voltageThreshold": 0.98
     },
     {
       "enabled": true,
       "name": "LA11",
-      "sampleRate": 8,
+      "sampleRateCode": 8,
       "sampleDepth": 200000,
-      "scanInterval": 100,
-      "deviceId": ""
+      "scanIntervalMs": 100,
+      "voltageThreshold": 0.98
     },
     {
       "enabled": true,
       "name": "LA12",
-      "sampleRate": 8,
+      "sampleRateCode": 8,
       "sampleDepth": 200000,
-      "scanInterval": 100,
-      "deviceId": ""
+      "scanIntervalMs": 100,
+      "voltageThreshold": 0.98
     }
   ]
 }
