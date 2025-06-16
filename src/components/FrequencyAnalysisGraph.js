@@ -99,7 +99,8 @@ const FrequencyAnalysisGraph = ({ brain1, brain2, timeWindow }) => {
 
   return (
     <Box sx={{
-      height: '100%',
+      marginTop: -12,
+      height: '150%',
       display: 'flex',
       flexDirection: 'column',
       backgroundColor: '#0b0e20',

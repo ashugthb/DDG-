@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>3D Time Crystal (Complete with Rotation)</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background: #222;
+        }
+        
+        textarea {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            width: 320px;
+            height: 120px;
+            background: #333;
+            color: #fff;
+            font-family: monospace;
+            border: 1px solid #555;
+            padding: 6px;
+            z-index: 10;
+        }
+        
+        button {
+            position: absolute;
+            top: 140px;
+            left: 10px;
+            padding: 6px 12px;
+            z-index: 10;
+            margin-right: 10px;
+        }
+    </style>
+</head>
+
+<body>
+    <h1 style="color: white; text-align: center;">Geometric Phase across multiple time domains</h1>
+    <textarea id="jsonInput">[
+  { "active": [8, 9] },
+  { "active": [5, 7, 8] },
+  { "active": [10] },
+  { "active": [3, 6, 9, 10] },
+  { "active": [8, 8] },
+  { "active": [2, 4, 7] }
+]</textarea>
+
+    <button id="pauseBtn" onclick="togglePause()" style="margin-top: 30px;">Pause</button>
+    <button onclick="updateVisualization()">Update</button>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+
+    <script>
+        let scene, camera, renderer, controls;
+        let rootPivot; // the single top-level group
+        const pivots = []; // all pivot groups for animate()
+        let isPaused = false; // Add pause state
+
+        const totalChannels = 12;
+        const goldenAngle = Math.PI * (3 - Math.sqrt(5));
+        const initialRadius = 40; // Keeping the smaller size from second file
+        const decay = 0.5;
+
+        initScene();
+        drawStructure(JSON.parse(document.getElementById('jsonInput').value));
+
+        function initScene() {
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x222222);
+
+            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 1, 2000);
+            camera.position.set(0, 0, 400);
+
+            renderer = new THREE.WebGLRenderer({
+                antialias: true
+            });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            document.body.appendChild(renderer.domElement);
+
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+
+            // Axes
+            scene.add(new THREE.AxesHelper(initialRadius * 2));
+            
+            // Lighting from second file
+            const hemi = new THREE.HemisphereLight(0xffffff, 0x444444, 0.6);
+            hemi.position.set(0, 200, 0);
+            scene.add(hemi);
+            const dir = new THREE.DirectionalLight(0xffffff, 0.7);
+            dir.position.set(200, 200, 200);
+            scene.add(dir);
+            scene.add(new THREE.AmbientLight(0xffffff, 0.3));
+
+            window.addEventListener('resize', () => {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            });
+
+            animate();
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+
+            // Only rotate if not paused
+            if (!isPaused) {
+                pivots.forEach(g => g.rotation.y += 0.01);
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        function togglePause() {
+            isPaused = !isPaused;
+            const pauseBtn = document.getElementById('pauseBtn');
+            pauseBtn.textContent = isPaused ? 'Resume' : 'Pause';
+        }
+
+        function clearScene() {
+            // Remove old rootPivot (and its entire subtree)
+            if (rootPivot) scene.remove(rootPivot);
+            pivots.length = 0;
+        }
+
+        // From second file - sizing logic
+        function calculateOptimalChildSize(parentRadius, numChildren, level) {
+            let baseChildSize;
+            
+            if (level === 0) {
+                baseChildSize = initialRadius * 0.3;
+            } else {
+                baseChildSize = initialRadius * (0.2 / Math.pow(1.5, level - 1));
+            }
+            
+            const siblingFactor = Math.min(1.0, 2.0 / Math.sqrt(numChildren));
+            const calculatedSize = baseChildSize * siblingFactor;
+            const maxAllowedSize = parentRadius * 0.7;
+            
+            return Math.min(calculatedSize, maxAllowedSize);
+        }
+
+        function calculateHalfInsideDistance(parentRadius, childRadius) {
+            const halfInsideDistance = parentRadius - (childRadius * 0.5);
+            const minDistance = childRadius * 0.3;
+            return Math.max(halfInsideDistance, minDistance);
+        }
+
+        function sphericalPosition(center, radius, thetaDeg, phiDeg) {
+            const theta = THREE.Math.degToRad(thetaDeg);
+            const phi = THREE.Math.degToRad(phiDeg);
+            return new THREE.Vector3(
+                center.x + radius * Math.sin(phi) * Math.cos(theta),
+                center.y + radius * Math.sin(phi) * Math.sin(theta),
+                center.z + radius * Math.cos(phi)
+            );
+        }
+
+        function channelDistance(a, b) {
+            const d = Math.abs(a - b);
+            return Math.min(d, totalChannels - d);
+        }
+
+        function findClosestParentChannel(channel, parentMap) {
+            const keys = Object.keys(parentMap).map(Number).filter(k => !isNaN(k));
+            if (keys.length === 0) return null;
+            
+            let best = keys[0];
+            let bestD = channelDistance(channel, best);
+            
+            for (let i = 1; i < keys.length; i++) {
+                const c = keys[i];
+                const d = channelDistance(channel, c);
+                if (d < bestD) {
+                    best = c;
+                    bestD = d;
+                }
+            }
+            return best;
+        }
+
+        function drawStructure(config) {
+            clearScene();
+
+            // 1) Create new root pivot at (0,0,0)
+            rootPivot = new THREE.Group();
+            scene.add(rootPivot);
+            pivots.push(rootPivot);
+
+            // Draw the root sphere
+            const rootRadius = initialRadius * 0.5;
+            const rootGeo = new THREE.SphereGeometry(rootRadius, 32, 32);
+            const rootMat = new THREE.MeshPhongMaterial({
+                color: 0x000001,
+                transparent: true,
+                opacity: 1
+            });
+            const rootMesh = new THREE.Mesh(rootGeo, rootMat);
+            rootPivot.add(rootMesh);
+
+            // Store actual radius for root
+            rootPivot.userData = { actualRadius: rootRadius };
+
+            // Keep pivotMap[level][uniqueId] → pivot group
+            const pivotMap = { '-1': { root: rootPivot } };
+            let radius = initialRadius;
+
+            // 2) For each level
+            config.forEach((device, level) => {
+                pivotMap[level] = {};
+                const nextRadius = radius * decay;
+
+                // First, process each sphere and determine its parent
+                const allSpheres = [];
+                
+                device.active.forEach((channel, idx) => {
+                    // Find closest parent
+                    let parentPivot = rootPivot;
+                    let parentKey = 'root';
+                    
+                    // Check immediate previous level
+                    const prevMap = pivotMap[level - 1] || {};
+                    const prevKeys = Object.keys(prevMap);
+                    
+                    if (prevKeys.length > 0) {
+                        const closestChannel = findClosestParentChannel(channel, prevMap);
+                        if (closestChannel !== null && prevMap[closestChannel]) {
+                            parentPivot = prevMap[closestChannel];
+                            parentKey = closestChannel;
+                        }
+                    } else {
+                        // Scan earlier levels if immediate previous has none
+                        for (let pl = level - 2; pl >= 0; pl--) {
+                            const pm = pivotMap[pl] || {};
+                            const closestChannel = findClosestParentChannel(channel, pm);
+                            if (closestChannel !== null && pm[closestChannel]) {
+                                parentPivot = pm[closestChannel];
+                                parentKey = `${pl}_${closestChannel}`;
+                                break;
+                            }
+                        }
+                    }
+                    
+                    allSpheres.push({
+                        channel: channel,
+                        originalIdx: idx,
+                        parentPivot: parentPivot,
+                        parentKey: parentKey,
+                        uniqueId: `${channel}_${idx}` // Handle duplicates
+                    });
+                });
+
+                // Group spheres by their parent
+                const childrenByParent = {};
+                allSpheres.forEach(sphere => {
+                    if (!childrenByParent[sphere.parentKey]) {
+                        childrenByParent[sphere.parentKey] = [];
+                    }
+                    childrenByParent[sphere.parentKey].push(sphere);
+                });
+
+                // Distribute each group around their parent
+                Object.values(childrenByParent).forEach(children => {
+                    const totalInGroup = children.length;
+                    
+                    children.forEach((child, localIdx) => {
+                        const parentPivot = child.parentPivot;
+                        const isRoot = (parentPivot === rootPivot);
+                        
+                        // Get actual parent radius
+                        const actualParentRadius = parentPivot.userData.actualRadius || initialRadius;
+                        
+                        // Calculate optimal child size
+                        const optimalChildRadius = calculateOptimalChildSize(actualParentRadius, totalInGroup, level);
+                        
+                        // Calculate "half inside" distance  
+                        const rLocal = calculateHalfInsideDistance(actualParentRadius, optimalChildRadius)* 1.4 ;
+                        
+                        // Equidistant distribution logic
+                        let thetaDeg, phiDeg;
+                        
+                        if (totalInGroup === 1) {
+                            thetaDeg = 0;
+                            phiDeg = 90;
+                        } else if (totalInGroup === 2) {
+                            thetaDeg = 0;
+                            phiDeg = localIdx === 0 ? 0 : 180;
+                        } else if (totalInGroup === 3) {
+                            thetaDeg = (360 / 3) * localIdx;
+                            phiDeg = 90;
+                        } else if (totalInGroup === 4) {
+                            const coords = [
+                                [0, 0, 1], [0.943, 0, -0.333],
+                                [-0.471, 0.816, -0.333], [-0.471, -0.816, -0.333]
+                            ];
+                            const [x, y, z] = coords[localIdx];
+                            thetaDeg = THREE.Math.radToDeg(Math.atan2(y, x));
+                            phiDeg = THREE.Math.radToDeg(Math.acos(z));
+                            if (thetaDeg < 0) thetaDeg += 360;
+                        } else if (totalInGroup === 5) {
+                            const goldenAngle = Math.PI * (3 - Math.sqrt(5));
+                            const y = 1 - (2 * localIdx / (totalInGroup - 1));
+                            const radiusAtY = Math.sqrt(1 - y * y);
+                            const theta = goldenAngle * localIdx;
+                            const x = radiusAtY * Math.cos(theta);
+                            const z = radiusAtY * Math.sin(theta);
+                            
+                            thetaDeg = THREE.Math.radToDeg(Math.atan2(z, x));
+                            phiDeg = THREE.Math.radToDeg(Math.acos(y));
+                            if (thetaDeg < 0) thetaDeg += 360;
+                        } else if (totalInGroup === 6) {
+                            const coords = [
+                                [0, 0, 1], [0, 0, -1], [1, 0, 0], 
+                                [-1, 0, 0], [0, 1, 0], [0, -1, 0]
+                            ];
+                            const [x, y, z] = coords[localIdx];
+                            thetaDeg = THREE.Math.radToDeg(Math.atan2(y, x));
+                            phiDeg = THREE.Math.radToDeg(Math.acos(z));
+                            if (thetaDeg < 0) thetaDeg += 360;
+                        } else if (totalInGroup === 8) {
+                            const s = 1 / Math.sqrt(3);
+                            const coords = [
+                                [s, s, s], [s, s, -s], [s, -s, s], [s, -s, -s],
+                                [-s, s, s], [-s, s, -s], [-s, -s, s], [-s, -s, -s]
+                            ];
+                            const [x, y, z] = coords[localIdx];
+                            thetaDeg = THREE.Math.radToDeg(Math.atan2(y, x));
+                            phiDeg = THREE.Math.radToDeg(Math.acos(z));
+                            if (thetaDeg < 0) thetaDeg += 360;
+                        } else {
+                            // General case using golden angle
+                            const goldenAngle = Math.PI * (3 - Math.sqrt(5));
+                            const y = 1 - (2 * localIdx / (totalInGroup - 1));
+                            const radiusAtY = Math.sqrt(1 - y * y);
+                            const theta = goldenAngle * localIdx;
+                            const x = radiusAtY * Math.cos(theta);
+                            const z = radiusAtY * Math.sin(theta);
+                            
+                            thetaDeg = THREE.Math.radToDeg(Math.atan2(z, x));
+                            phiDeg = THREE.Math.radToDeg(Math.acos(y));
+                            if (thetaDeg < 0) thetaDeg += 360;
+                        }
+
+                        // Calculate local position relative to parent's origin
+                        const localPos = sphericalPosition(
+                            new THREE.Vector3(0, 0, 0),
+                            rLocal, thetaDeg, phiDeg
+                        );
+
+                        // Create pivot at localPos under parentPivot
+                        const pivot = new THREE.Group();
+                        pivot.position.copy(localPos);
+                        parentPivot.add(pivot);
+                        pivots.push(pivot);
+
+                        // Create mesh at pivot origin (0,0,0)
+                        const geo = new THREE.SphereGeometry(optimalChildRadius, 16, 16);
+                        const mat = new THREE.MeshPhongMaterial({
+                            color: new THREE.Color(`hsl(${(level * 60) % 360},70%,50%)`),
+                            shininess: 1,
+                            specular: 0x333333,
+                            transparent: true,
+                            opacity: 1,
+                            side: THREE.DoubleSide
+                        });
+                        const mesh = new THREE.Mesh(geo, mat);
+                        pivot.add(mesh);
+
+                        // Store actual radius for this pivot
+                        pivot.userData = { actualRadius: optimalChildRadius };
+
+                        // Store pivot with unique ID for duplicates
+                        pivotMap[level][child.uniqueId] = pivot;
+                        
+                        // Also store by channel for parent lookup (last one wins)
+                        pivotMap[level][child.channel] = pivot;
+                    });
+                });
+
+                radius = nextRadius;
+            });
+        }
+
+        function updateVisualization() {
+            try {
+                drawStructure(JSON.parse(document.getElementById("jsonInput").value));
+            } catch {
+                alert("Invalid JSON.");
+            }
+        }
+    </script>
+</body>
+
+</html>
