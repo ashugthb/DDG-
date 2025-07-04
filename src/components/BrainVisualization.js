@@ -56,7 +56,7 @@ const BrainVisualization = ({
     
     // Load outline image as mask
     const outlineImg = new Image();
-    outlineImg.src = '/images/template_150.png'; // Use your transparent outline
+    outlineImg.src = '/images/outline_300.png'; // Use your transparent outline
     outlineImg.crossOrigin = 'anonymous'; // Handle CORS issues
     
     // Set up onload handlers
@@ -198,7 +198,8 @@ const BrainVisualization = ({
         width,
         height,
         colors,
-        imagesRef.current.outline, // Pass the outline image as mask
+        imagesRef.current.outline,  // Use outline image for masking
+        imagesRef.current.template, // Pass the template image as mask
         isActive,
       );
       
@@ -232,7 +233,7 @@ const BrainVisualization = ({
           
           size = baseSize * pulseFactor;
         } else {
-          color = colors.inactive;
+          color = [255, 255, 255];
           size = 2;
         }
         

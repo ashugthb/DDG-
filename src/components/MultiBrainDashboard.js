@@ -895,6 +895,11 @@ const MultiBrainDashboard = () => {
     }
     return pairs;
   }, [brains]);
+  const FREQUENCY_BANDS = [
+  "0–100 MHz", "100–200 MHz", "2–4 kHz", "4–8 kHz",
+  "8–16 kHz", "16–32 kHz", "32–64 kHz", "64–128 kHz",
+  "128–256 kHz", "256–512 kHz", "512–1000 kHz", "1–2 MHz"
+];
 
   // Initialize brains
   const initializeBrains = useCallback(async () => {
@@ -1385,207 +1390,75 @@ const MultiBrainDashboard = () => {
       >
         <Grid container spacing={1.5} sx={{ height: "100%" }}>
           {/* Display brain pairs in the grid (2 brains per cell) */}
-          {brainPairs.map((pair, pairIndex) => (
-            <Grid item md={3} key={pairIndex} sx={{ height: "33%" }}>
-              <BrainCell
-                elevation={4}
-                onClick={() => handleBrainPairSelect(pairIndex)}
-                sx={{
-                  cursor: "pointer",
-                  border: selectedBrainPair === pair
-                    ? `2px solid ${settings.colorTheme === "default" ? "#00b4ff" : "#00ff64"}`
-                    : "none",
-                  transition: "transform 0.2s ease-in-out",
-                  position: "relative",
-                  height: "100%",
-                  "&:hover": {
-                    transform: "scale(1.02) translateY(-2px)",
-                  },
-                }}
-              >
-                {/* Pair label overlay */}
-                <Box
-                  sx={{
-                    position: "absolute",
-                    top: 5,
-                    left: 5,
-                    backgroundColor: "rgba(0,0,0,0.6)",
-                    color: "white",
-                    padding: "2px 6px",
-                    borderRadius: 1,
-                    fontSize: "0.7rem",
-                    zIndex: 2,
-                    display: "flex", 
-                    alignItems: "center"
-                  }}
-                >
-                  <GroupWorkIcon fontSize="inherit" sx={{ mr: 0.5 }} />
-                  Pair {pairIndex + 1}
-                </Box>
-                
-                {/* Open in new tab button */}
-                <IconButton
-                  onClick={(e) => {
-                    e.stopPropagation(); // Prevent the cell click handler
-                    openBrainPairInNewTab(pairIndex);
-                  }}
-                  sx={{
-                    position: "absolute",
-                    top: 5,
-                    right: 5,
-                    backgroundColor: "rgba(0,0,0,0.6)",
-                    color: "white",
-                    padding: "4px",
-                    zIndex: 3,
-                    "&:hover": {
-                      backgroundColor: "rgba(0,100,255,0.6)",
-                    }
-                  }}
-                  size="small"
-                >
-                  <Tooltip title="Open in new tab">
-                    <OpenInNewIcon fontSize="small" />
-                  </Tooltip>
-                </IconButton>
-                
-                {/* Split view for the brain pair */}
-                <Box sx={{ display: "flex", height: "100%" }}>
-                  <Box sx={{ width: "50%", height: "100%", position: "relative" }}>
-                    {pair[0] && (
-                      <MemoizedBrainVis
-                        brainId={pair[0].id}
-                        brainData={{
-                          isActive: pair[0].isActive,
-                          channels: pair[0].channels,
-                          serialNumber: pair[0].serialNumber,
-                          model: pair[0].model,
-                          captureCount: pair[0].captureCount,
-                        }}
-                        pulseTime={pair[0].pulseTime}
-                        showNoActivity={false} // Don't show "No Activity" text
-                        colorScale={COLOR_SCALES[settings.colorTheme || 'default']} // Pass the color scale
-                      />
-                    )}
-                    <Typography
-                      variant="caption"
-                      sx={{
-                        position: "absolute",
-                        bottom: 2,
-                        left: 2,
-                        color: "white",
-                        backgroundColor: "rgba(0,0,0,0.6)",
-                        padding: "1px 4px",
-                        borderRadius: 1,
-                      }}
-                    >
-                      Brain {pair[0]?.id + 1 || "N/A"}
-                    </Typography>
-                    
-                    {/* Active indicator */}
-                    {pair[0] && (
-                      <Box
-                        sx={{
-                          position: "absolute",
-                          top: 2,
-                          right: 2,
-                          width: 8,
-                          height: 8,
-                          borderRadius: "50%",
-                          backgroundColor: pair[0].isActive ? "#4caf50" : "#f44336",
-                        }}
-                      />
-                    )}
-                  </Box>
-                  
-                  <Box sx={{ width: "50%", height: "100%", position: "relative" }}>
-                    {pair[1] && (
-                      <MemoizedBrainVis
-                        brainId={pair[1].id}
-                        brainData={{
-                          isActive: pair[1].isActive,
-                          channels: pair[1].channels,
-                          serialNumber: pair[1].serialNumber,
-                          model: pair[1].model,
-                          captureCount: pair[1].captureCount,
-                        }}
-                        pulseTime={pair[1].pulseTime}
-                        showNoActivity={false} // Don't show "No Activity" text
-                        colorScale={COLOR_SCALES[settings.colorTheme || 'default']} // Pass the color scale
-                      />
-                    )}
-                    <Typography
-                      variant="caption"
-                      sx={{
-                        position: "absolute",
-                        bottom: 2,
-                        left: 2,
-                        color: "white",
-                        backgroundColor: "rgba(0,0,0,0.6)",
-                        padding: "1px 4px",
-                        borderRadius: 1,
-                      }}
-                    >
-                      Brain {pair[1]?.id + 1 || "N/A"}
-                    </Typography>
-                    
-                    {/* Active indicator */}
-                    {pair[1] && (
-                      <Box
-                        sx={{
-                          position: "absolute",
-                          top: 2,
-                          right: 2,
-                          width: 8,
-                          height: 8,
-                          borderRadius: "50%",
-                          backgroundColor: pair[1].isActive ? "#4caf50" : "#f44336",
-                        }}
-                      />
-                    )}
-                  </Box>
-                </Box>
-                
-                {/* Activity indicator at the bottom with enhanced color gradients */}
-                <Box
-                  sx={{
-                    position: "absolute",
-                    bottom: 0,
-                    left: 0,
-                    right: 0,
-                    height: 3,
-                    display: "flex",
-                  }}
-                >
-                  {/* Left brain activity indicator with enhanced color scheme */}
-                  <Box
-                    sx={{
-                      width: "50%",
-                      backgroundColor: pair[0] ? 
-                        getActivityColor(
-                          (pair[0]?.channels?.filter(ch => ch.activity > 0).length || 0) / 10,
-                          pair[0]?.isActive,
-                          settings.colorTheme
-                        ) : 
-                        COLOR_SCALES[settings.colorTheme || 'default'].noActivity, // Default to no activity color
-                    }}
-                  />
-                  {/* Right brain activity indicator with enhanced color scheme */}
-                  <Box
-                    sx={{
-                      width: "50%",
-                      backgroundColor: pair[1] ? 
-                        getActivityColor(
-                          (pair[1]?.channels?.filter(ch => ch.activity > 0).length || 0) / 10,
-                          pair[1]?.isActive,
-                          settings.colorTheme
-                        ) : 
-                        COLOR_SCALES[settings.colorTheme || 'default'].noActivity, // Default to no activity color
-                    }}
-                  />
-                </Box>
-              </BrainCell>
-            </Grid>
-          ))}
+          {brains.map((brain, i) => (
+  <Grid item md={3} key={brain?.id ?? i} sx={{ height: "33%" }}>
+    <BrainCell
+      elevation={4}
+      onClick={() => {
+        // Open the detail view with an "array" containing only this brain
+        setSelectedBrainPair([brain, null]); // Pass [brain, null] to reuse your time-sliced logic
+        setShowBrainPairDetail(true);
+      }}
+      sx={{
+        cursor: "pointer",
+        border: selectedBrainPair?.[0]?.id === (brain?.id ?? i)
+          ? `2px solid ${settings.colorTheme === "default" ? "#00b4ff" : "#00ff64"}`
+          : "none",
+        transition: "transform 0.2s ease-in-out",
+        position: "relative",
+        height: "100%",
+        "&:hover": {
+          transform: "scale(1.02) translateY(-2px)",
+        },
+      }}
+    >
+      {/* One brain per cell, with same sizing */}
+      <MemoizedBrainVis
+        brainId={brain?.id || 0}
+        brainData={{
+          isActive: true,
+          channels: brain.channels || [],
+          serialNumber: brain.serialNumber || "",
+          model: brain.model || "",
+          captureCount: brain.captureCount || 0,
+        }}
+        pulseTime={brain.pulseTime}
+        showNoActivity={false}
+        colorScale={COLOR_SCALES[settings.colorTheme || "default"]}
+      />
+
+      {/* Frequency Band Label */}
+      <Box
+        sx={{
+          position: "absolute",
+          bottom: 4,
+          left: 4,
+          color: "white",
+          backgroundColor: "rgba(0,0,0,0.7)",
+          px: 1.2,
+          py: 0.4,
+          borderRadius: 1,
+          fontSize: "0.85rem",
+        }}
+      >
+        {FREQUENCY_BANDS[i] ?? "N/A"}
+      </Box>
+
+      {/* Active indicator */}
+      <Box
+        sx={{
+          position: "absolute",
+          top: 2,
+          right: 2,
+          width: 8,
+          height: 8,
+          borderRadius: "50%",
+          backgroundColor: brain.isActive ? "#4caf50" : "#f44336",
+        }}
+      />
+    </BrainCell>
+  </Grid>
+))}
         </Grid>
 
         {/* Enhanced Color scale legend with more color stops */}

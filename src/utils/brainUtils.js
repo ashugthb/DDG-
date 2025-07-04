@@ -275,291 +275,244 @@ export function getBrainMask(gridSize) {
 }
 
 // OPTIMIZATION: More efficient contour plotting function with enhanced coloring
-export function drawAdvancedContourMap(ctx, channels, width, height, colors, outlineImg, isActive) {
+export function drawAdvancedContourMap(
+  ctx,
+  channels,
+  width,
+  height,
+  colors,
+  outlineImg,
+  templateImg,
+  isActive
+) {
   const centerX = width / 2;
   const centerY = height / 2;
   const brainWidth = width * 0.8;
   const brainHeight = height * 0.8;
-  
-  // If brain is not active, just draw the outline with minimal intensity
+  const brainX = centerX - brainWidth / 2;
+  const brainY = centerY - brainHeight / 2 + 15; // Adjust vertical alignment
+
+  function createInvertedMask(templateImg, width, height) {
+    const maskCanvas = document.createElement('canvas');
+    maskCanvas.width = width;
+    maskCanvas.height = height;
+    const maskCtx = maskCanvas.getContext('2d');
+    maskCtx.drawImage(templateImg, 0, 0, width, height);
+    const maskData = maskCtx.getImageData(0, 0, width, height);
+    const data = maskData.data;
+    for (let i = 0; i < data.length; i += 4) {
+      // Invert: transparent (alpha=0) becomes opaque (alpha=255), black/opaque becomes transparent
+      if (data[i+3] === 0) {
+        data[i+3] = 255;
+      } else {
+        data[i+3] = 0;
+      }
+    }
+    maskCtx.putImageData(maskData, 0, 0);
+    return maskCanvas;
+  }
+
+  // --- INACTIVE BRAIN: dark blue mask + electrodes ---
   if (!isActive || !channels || channels.length === 0) {
-    // Draw brain outline with low intensity
-    const brainX = centerX - brainWidth / 2;
-    const brainY = centerY - brainHeight / 2 + 15; // Shifted down more to match the outline better
-    
+    if (templateImg && templateImg.complete) {
+      // 1. Create a temp canvas for the field and electrodes
+      const tempCanvas = document.createElement('canvas');
+      tempCanvas.width = brainWidth;
+      tempCanvas.height = brainHeight;
+      const tempCtx = tempCanvas.getContext('2d');
+
+      // 2. Draw the dark blue background (low activity, fill full canvas)
+      tempCtx.fillStyle = "rgba(5, 20, 60, 0.95)"; // dark blue, adjust as needed
+      tempCtx.fillRect(0, 0, brainWidth, brainHeight);
+
+      // 3. Draw all electrodes as gray dots inside (on the temp canvas, NOT main ctx!)
+      if (channels && channels.length > 0) {
+        for (const channel of channels) {
+          const electrode = ELECTRODE_POSITIONS[channel.channel];
+          if (!electrode) continue;
+          const xCanvas = (electrode.x / templateImg.width) * brainWidth;
+          const yCanvas = (electrode.y / templateImg.height) * brainHeight;
+          tempCtx.beginPath();
+          tempCtx.arc(xCanvas, yCanvas, 6, 0, Math.PI * 2);
+          tempCtx.fillStyle = "rgba(0, 0, 0, 0.8)";
+          tempCtx.fill();
+          tempCtx.closePath();
+        }
+      }
+
+      // 4. Mask with inverted mask
+      const mask = createInvertedMask(templateImg, brainWidth, brainHeight);
+      tempCtx.globalCompositeOperation = "destination-in";
+      tempCtx.drawImage(mask, 0, 0, brainWidth, brainHeight);
+      tempCtx.globalCompositeOperation = "source-over";
+
+      // 5. Draw result on main canvas
+      ctx.drawImage(tempCanvas, brainX, brainY);
+    }
+
+    // 6. Draw outline always on top
     if (outlineImg && outlineImg.complete) {
-      ctx.globalAlpha = 0.3; // Low opacity for inactive brain
-      ctx.drawImage(outlineImg, brainX, brainY, brainWidth, brainHeight);
       ctx.globalAlpha = 1.0;
+      ctx.drawImage(outlineImg, brainX, brainY, brainWidth, brainHeight);
     }
     return;
   }
-  
-  // OPTIMIZATION: Increased grid size for better visual fidelity
-  const gridSize = 80; // Increased from 60 for smoother contours
-  
-  // Get brain mask from cache
-  const brainMask = getBrainMask(gridSize);
-  
-  // Normalize to 0-4 range for contour plotting
+  // --- 2. Active: draw contour masked by inverted template ---
+  // (contour code as before)
+
+  const gridSize = 80;
   const xdiff = TEMPLATE_MAX_X - TEMPLATE_MIN_X;
   const ydiff = TEMPLATE_MAX_Y - TEMPLATE_MIN_Y;
-  
-  // Extract electrode data
-  const x = [];
-  const y = [];
-  const z = [];
-  
-  // Calculate average activity for background level
-  let avgActivity = 0;
-  let activeCount = 0;
-  
-  // OPTIMIZATION: Collect data only from active electrodes
+  const x = [], y = [], z = [];
+  let avgActivity = 0, activeCount = 0;
+
   for (const channel of channels) {
     const electrode = ELECTRODE_POSITIONS[channel.channel];
     if (!electrode) continue;
-    
-    // Normalize coordinates to 0-4 range
     const normX = ((electrode.x - TEMPLATE_MIN_X) / xdiff) * 4;
-    // Flip y-axis for consistency with Python code
     const normY = 4 - ((electrode.y - TEMPLATE_MIN_Y) / ydiff) * 4;
-    
-    // Activity level from transitions (normalized)
     let activity;
     if (channel.totalTransitions > 0) {
-      // Enhanced activity level for stronger visualization
-      // Scale to ensure high transitions are shown as red
       activity = Math.min(1.0, channel.totalTransitions / 150.0) * 3.0 + 0.5;
       avgActivity += activity;
       activeCount += 1;
     } else {
-      activity = 0.2; // Baseline activity
+      activity = 0.2;
     }
-    
     x.push(normX);
     y.push(normY);
     z.push(activity);
   }
-  
-  // If no active electrodes, return
   if (x.length === 0) return;
-  
-  // Calculate average activity for corner points
-  if (activeCount > 0) {
-    avgActivity /= activeCount;
-  } else {
-    avgActivity = 0.2; // Baseline
-  }
-  
-  // Add corner points to improve interpolation at edges
-  // Enhanced with more border points for smoother edges
+  if (activeCount > 0) avgActivity /= activeCount;
+  else avgActivity = 0.2;
+
   const corners = [
     [0, 0], [1, 0], [2, 0], [3, 0], [4, 0],
-    [0, 1], [4, 1],
-    [0, 2], [4, 2],
-    [0, 3], [4, 3],
+    [0, 1], [4, 1], [0, 2], [4, 2], [0, 3], [4, 3],
     [0, 4], [1, 4], [2, 4], [3, 4], [4, 4]
   ];
-  
   for (const [cx, cy] of corners) {
     x.push(cx);
     y.push(cy);
-    z.push(avgActivity * 0.6); // Slightly reduce activity at edges for better gradient transition
+    z.push(avgActivity * 0.6);
   }
-  
-  // OPTIMIZATION: Use typed arrays for better performance
+
   const zi = new Float32Array(gridSize * gridSize);
-  
-  // OPTIMIZATION: Simplified distance calculation with lookup tables
   const gxValues = new Float32Array(gridSize);
   const gyValues = new Float32Array(gridSize);
-  
   for (let i = 0; i < gridSize; i++) {
     gxValues[i] = i / gridSize * 4;
     gyValues[i] = i / gridSize * 4;
   }
-  
-  // OPTIMIZATION: Reuse distance array
   const distances = new Float32Array(x.length);
   const weights = new Float32Array(x.length);
-  
-  // Enhanced inverse distance weighting interpolation for smoother results
   for (let j = 0; j < gridSize; j++) {
     const gy = gyValues[j];
-    
     for (let i = 0; i < gridSize; i++) {
       const index = j * gridSize + i;
-      
-      // Skip if outside the brain mask
-      if (isNaN(brainMask[j][i])) {
-        zi[index] = NaN;
-        continue;
-      }
-      
       const gx = gxValues[i];
-      
-      let weightSum = 0;
-      let valueSum = 0;
-      
-      // Calculate distances to all known points
-      let foundExactMatch = false;
-      
+      let weightSum = 0, valueSum = 0, foundExactMatch = false;
       for (let k = 0; k < x.length; k++) {
-        // OPTIMIZATION: More efficient distance calculation
         const dx = gx - x[k];
         const dy = gy - y[k];
         const dist = Math.sqrt(dx * dx + dy * dy);
-        
         if (dist < 0.0001) {
-          // Very close to a known point
           zi[index] = z[k];
           foundExactMatch = true;
           break;
         }
-        
         distances[k] = dist;
-        // Modified power for stronger interpolation effect (increased from 2 to 2.5)
-        const weight = 1 / Math.pow(dist, 2.5);
+        const weight = 1 / Math.pow(dist, 2);
         weights[k] = weight;
         weightSum += weight;
         valueSum += z[k] * weight;
       }
-      
       if (!foundExactMatch && weightSum > 0) {
         zi[index] = valueSum / weightSum;
+      } else if (!foundExactMatch) {
+        zi[index] = NaN;
       }
     }
   }
-  
-  // Find min/max for normalization
-  let ziMin = Infinity;
-  let ziMax = -Infinity;
-  
+
+  let ziMin = Infinity, ziMax = -Infinity;
   for (let i = 0; i < zi.length; i++) {
     if (!isNaN(zi[i])) {
       ziMin = Math.min(ziMin, zi[i]);
       ziMax = Math.max(ziMax, zi[i]);
     }
   }
-  
-  // Apply contrast enhancement
-  const contrast = 2.2; // Stronger contrast for more vibrant visualization
-  const ziRange = Math.max(0.1, ziMax - ziMin); // Avoid division by zero
-  
-  // Create a temporary canvas for the contour
+  const contrast = 1.3;
+  const ziRange = Math.max(0.1, ziMax - ziMin);
+
   const tempCanvas = document.createElement('canvas');
   tempCanvas.width = gridSize;
   tempCanvas.height = gridSize;
-  const tempCtx = tempCanvas.getContext('2d', { willReadFrequently: true });
-  
-  // OPTIMIZATION: Create a single ImageData for the entire contour
+  const tempCtx = tempCanvas.getContext('2d');
   const imageData = tempCtx.createImageData(gridSize, gridSize);
   const data = imageData.data;
-  
   for (let j = 0; j < gridSize; j++) {
     for (let i = 0; i < gridSize; i++) {
       const index = j * gridSize + i;
       const pixelIndex = (j * gridSize + i) * 4;
-      
       if (isNaN(zi[index])) {
-        // Set transparent pixel for areas outside the brain
         data[pixelIndex + 3] = 0;
         continue;
       }
-      
-      // Normalize value to 0-1 range with contrast enhancement
       const normalizedVal = (zi[index] - ziMin) / ziRange;
-      
-      // Apply contrast enhancement
       let val = 0.5 + (normalizedVal - 0.5) * contrast;
-      val = Math.max(0, Math.min(1, val)); // Clamp to 0-1
-      
-      // --- SMOOTH COLOR INTERPOLATION with enhanced colormap ---
-      // Use enhanced colormap with more color stops for smoother transitions
+      val = Math.max(0, Math.min(1, val));
       const scaled = val * (COLORMAP.length - 1);
       const idx = Math.min(Math.floor(scaled), COLORMAP.length - 2);
       const frac = scaled - idx;
       const colorA = COLORMAP[idx];
       const colorB = COLORMAP[idx + 1];
       const color = lerpColor(colorA, colorB, frac);
-
-      // Set pixel color
       data[pixelIndex] = color[0];
       data[pixelIndex + 1] = color[1];
       data[pixelIndex + 2] = color[2];
-      data[pixelIndex + 3] = Math.min(255, 180 + val * 75); // More vivid alpha
+      data[pixelIndex + 3] = Math.min(255, 180 + val * 75);
     }
   }
-  
-  // Put image data to temp canvas
   tempCtx.putImageData(imageData, 0, 0);
-  
-  // Create a canvas for the masked result
-  const brainX = centerX - brainWidth / 2;
-  // Shift the visualization down by 15px to match the outline better
-  const brainY = centerY - brainHeight / 2 + 15;
-  
-  // Properly handle masking with the brain outline image
-  if (outlineImg && outlineImg.complete) {
-    // Create a canvas for the mask processing
+
+  // Mask the activity contour using the inverted brain mask (templateImg)
+  let maskedContour = tempCanvas;
+  if (templateImg && templateImg.complete) {
     const maskCanvas = document.createElement('canvas');
     maskCanvas.width = brainWidth;
     maskCanvas.height = brainHeight;
-    const maskCtx = maskCanvas.getContext('2d', { willReadFrequently: true });
-    
-    // Step 1: Draw the mask image (which has transparent brain and black outside)
-    maskCtx.drawImage(outlineImg, 0, 0, brainWidth, brainHeight);
-    
-    // Step 2: Extract the alpha channel to create our mask
-    const maskData = maskCtx.getImageData(0, 0, brainWidth, brainHeight);
-    const maskPixels = maskData.data;
-    
-    // Step 3: Invert the mask - we want to keep pixels where the brain image is transparent
-    // and discard pixels where the brain image is black
-    for (let i = 0; i < maskPixels.length; i += 4) {
-      // If pixel is black (outside the brain)
-      if (maskPixels[i] === 0 && maskPixels[i+1] === 0 && maskPixels[i+2] === 0 && maskPixels[i+3] === 255) {
-        // Make it transparent (we'll discard this)
-        maskPixels[i+3] = 0;
-      } else {
-        // Otherwise make it fully opaque (we'll keep this)
-        maskPixels[i] = 255;
-        maskPixels[i+1] = 255;
-        maskPixels[i+2] = 255;
-        maskPixels[i+3] = 255;
-      }
-    }
-    
-    // Put the inverted mask back
-    maskCtx.putImageData(maskData, 0, 0);
-    
-    // Step 4: Clear the canvas and redraw using the mask
-    maskCtx.globalCompositeOperation = 'source-in';
-    
-    // Step 5: Draw our contour data onto the mask
+    const maskCtx = maskCanvas.getContext('2d');
     maskCtx.drawImage(tempCanvas, 0, 0, brainWidth, brainHeight);
-    
-    // Step 6: Draw the final masked result to the main canvas
-    ctx.drawImage(maskCanvas, brainX, brainY);
-    
-    // Add subtle glow effect for active brains
-    if (isActive && activeCount > 0) {
-      ctx.save();
-      ctx.globalAlpha = 0.15;
-      ctx.filter = 'blur(8px)';
-      ctx.drawImage(maskCanvas, brainX, brainY);
-      ctx.restore();
-    }
-    
-    // Optional: Draw a subtle brain outline
-    ctx.strokeStyle = `rgba(${colors.brainOutline[0]}, ${colors.brainOutline[1]}, ${colors.brainOutline[2]}, 0.5)`;
-    ctx.lineWidth = 1;
+
+    // INVERT THE MASK HERE
+    const invertedMask = createInvertedMask(templateImg, brainWidth, brainHeight);
+
+    maskCtx.globalCompositeOperation = 'destination-in';
+    maskCtx.drawImage(invertedMask, 0, 0, brainWidth, brainHeight);
+    maskCtx.globalCompositeOperation = 'source-over';
+    maskedContour = maskCanvas;
+  }
+  ctx.drawImage(maskedContour, brainX, brainY, brainWidth, brainHeight);
+
+  // Optional: activity glow
+  if (isActive && activeCount > 0) {
+    ctx.save();
+    ctx.globalAlpha = 0.15;
+    ctx.filter = 'blur(8px)';
+    ctx.drawImage(maskedContour, brainX, brainY, brainWidth, brainHeight);
+    ctx.restore();
+  }
+
+  // Always draw the outline border last
+  if (outlineImg && outlineImg.complete) {
+    ctx.globalAlpha = 1.0;
     ctx.drawImage(outlineImg, brainX, brainY, brainWidth, brainHeight);
-  } else {
-    // Fallback if outline image is not available
-    ctx.drawImage(tempCanvas, brainX, brainY, brainWidth, brainHeight);
   }
 }
+
+
 
 // Function to parse the logic data file
 export async function parseLogicData(filePath) {
