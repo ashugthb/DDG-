@@ -34,7 +34,7 @@ const std::string OUTPUT_DIRECTORY = "C:\\Ashvajeet\\FULL_Setup\\brain-viz\\publ
 const std::string OUTPUT_FILENAME = "logic_data.txt";
 
 // Device connection constants
-const int MAX_DEVICES = 10;
+const int MAX_DEVICES = 12;
 const int MAX_RETRIES = 1;
 const int CONNECTION_TIMEOUT_MS = 100;
 // Trigger settings structure
@@ -707,6 +707,7 @@ public:
 private:
     // DLL handling
     HMODULE m_dll = nullptr;
+    std::vector<HMODULE> m_dlls; // Support multiple DLL instances
     unsigned short m_deviceIndex = 0;
     std::string m_lastError;
 
@@ -812,7 +813,14 @@ private:
         DETAILS, // Show detailed view of one device
         ACTIVITY // Show only active channels across all devices
     };
+    struct DeviceGroup
+    {
+        std::string dllPath;
+        int startIndex;
+        int deviceCount;
+    };
 
+    std::vector<DeviceGroup> m_deviceGroups;
     std::vector<HantekDevice> m_devices;
     std::vector<DeviceState> m_deviceStates;
     std::vector<AnalyzerConfig> m_configs;
@@ -845,6 +853,14 @@ private:
         {800000000, 1200000000}, // Band 10: 0.8-1.2 GHz
         {1940000000, 5310000000} // Band 11: 1.94-5.31 GHz
     };
+    void configureDeviceGroups()
+    {
+        // First group: devices 0-9 using primary DLL
+        m_deviceGroups.push_back({"C:\\Program Files (x86)\\Hantek4032L\\HTLAHard.dll", 0, 10});
+
+        // Second group: devices 10-11 using secondary DLL
+        m_deviceGroups.push_back({"C:\\Program Files (x86)\\Hantek4032L\\HTLAHard.dll", 10, 2});
+    }
 
 public:
     MultiLogicAnalyzer(int numDevices = MAX_DEVICES)
@@ -895,6 +911,8 @@ public:
 
         // Initialize last config modified times
         m_lastConfigModified.resize(numDevices, 0);
+        // Setup default device groups (0-9 and 10-11)
+        configureDeviceGroups();
     }
 
     ~MultiLogicAnalyzer()
@@ -924,6 +942,8 @@ public:
         std::cout << "=== Initializing Multi-Device Logic Analyzer ===\n";
         std::cout << "Looking for " << m_numDevices << " devices...\n\n";
 
+       
+
         // Load configurations first
         for (int i = 0; i < m_numDevices; i++)
         {
@@ -935,7 +955,7 @@ public:
 
         // Initialize device states
         for (int i = 0; i < m_numDevices; i++)
-        {
+            {
             DeviceState &state = m_deviceStates[i];
             state.connected = false;
             state.active = false;
@@ -976,90 +996,53 @@ public:
 
         auto overallStartTime = std::chrono::steady_clock::now();
 
-        for (int i = 0; i < m_numDevices; i++)
-        {
-            std::cout << "\n--- Device " << i << " Connection Attempt ---\n";
-            std::cout << "  Trying device " << i << "... ";
-            std::cout.flush(); // Ensure output is displayed immediately
+        for (const auto& group : m_deviceGroups) {
+            for (int i = 0; i < group.deviceCount; i++) {
+                int deviceIndex = group.startIndex + i;
+                if (deviceIndex >= m_numDevices) break;
 
-            bool connected = false;
-            int attempts = 0;
+                std::cout << "\n--- Device " << deviceIndex << " Connection Attempt ---\n";
+                HantekDevice& device = m_devices[deviceIndex];
 
-            while (!connected && attempts < MAX_RETRIES)
-            {
-                attempts++;
-
-                // Load DLL for this device
-                if (!m_devices[i].loadDLL(dllPath))
-                {
-                    std::cout << "FAILED (DLL error)\n";
-                    break;
+                // Load DLL for this group
+                if (!device.loadDLL(group.dllPath)) {
+                    std::cout << "  DLL load FAILED: " << device.getLastError() << "\n";
+                    continue;
                 }
 
-                // Connect to device
-                if (!m_devices[i].connect(i))
-                {
-                    if (attempts < MAX_RETRIES)
-                    {
-                        std::cout << "Retry " << attempts << "/" << MAX_RETRIES << "... ";
-                        std::this_thread::sleep_for(std::chrono::seconds(1));
-                        continue;
-                    }
-                    else
-                    {
-                        std::cout << "NOT FOUND after " << MAX_RETRIES << " attempts\n";
-                        break;
-                    }
+                // Connect using relative index within group
+                if (!device.connect(i)) {
+                    std::cout << "  Connection FAILED: " << device.getLastError() << "\n";
+                    continue;
                 }
 
                 // Initialize device
-                if (!m_devices[i].initialize())
-                {
-                    std::cout << "FAILED (Init error)\n";
-                    break;
+                if (!device.initialize()) {
+                    std::cout << "  Initialization FAILED: " << device.getLastError() << "\n";
+                    continue;
                 }
 
                 // Apply configuration
-                if (!applyConfiguration(i))
-                {
-                    std::cout << "FAILED (Config error)\n";
-                    break;
+                if (!applyConfiguration(deviceIndex)) {
+                    std::cout << "  Configuration FAILED\n";
+                    continue;
                 }
 
-                // Successfully connected and configured
-                m_deviceStates[i].connected = true;
-                m_deviceStates[i].active = true;
-                m_deviceStates[i].serialNumber = m_devices[i].getSerialNumber();
-                m_deviceStates[i].model = m_devices[i].getModel();
-                m_deviceStates[i].firmwareVersion = m_devices[i].getFirmwareVersion();
+                // Update device state
+                m_deviceStates[deviceIndex].connected = true;
+                m_deviceStates[deviceIndex].active = true;
+                m_deviceStates[deviceIndex].serialNumber = device.getSerialNumber();
+                m_deviceStates[deviceIndex].model = device.getModel();
+                m_deviceStates[deviceIndex].firmwareVersion = device.getFirmwareVersion();
                 m_activeDevices++;
-
-                connected = true;
-                std::cout << "OK\n";
-
-                // Store device info in config for display and reporting
-                m_configs[i].serialNumber = m_devices[i].getSerialNumber();
-                m_configs[i].model = m_devices[i].getModel();
-
-                // Record connection result
-                ConnectionResult &result = m_connectionResults[i];
-                result.success = true;
-                result.message = "Connected successfully";
+                
+                // Store device info
+                m_configs[deviceIndex].serialNumber = device.getSerialNumber();
+                m_configs[deviceIndex].model = device.getModel();
+                
+                std::cout << "  Connection SUCCESS\n";
             }
-
-            // If connection failed, record the failure
-            if (!connected)
-            {
-                ConnectionResult &result = m_connectionResults[i];
-                result.success = false;
-                result.message = m_devices[i].getLastError();
-                result.errorCode = "CONN_FAILED";
-            }
-
-            // Brief pause between devices to prevent USB bus overload
-            std::this_thread::sleep_for(std::chrono::milliseconds(500));
         }
-
         auto overallEndTime = std::chrono::steady_clock::now();
         double totalTime = std::chrono::duration<double>(overallEndTime - overallStartTime).count();
 
@@ -1662,9 +1645,6 @@ public:
                     lastState = currentState;
                 }
             }
-            
-
-
 
             // Process each time slice
             for (int slice = 0; slice < numSlices; slice++)
@@ -1909,36 +1889,39 @@ public:
         }
     }
     double computePhaseDifference(
-    const std::vector<double>& refEdges,
-    const std::vector<double>& targetEdges,
-    double refFrequency) 
-{
-    if (refEdges.size() < 2 || targetEdges.empty()) 
-        return -999.0;
+        const std::vector<double> &refEdges,
+        const std::vector<double> &targetEdges,
+        double refFrequency)
+    {
+        if (refEdges.size() < 2 || targetEdges.empty())
+            return -999.0;
 
-    double sumPhase = 0.0;
-    int count = 0;
-    double period = 1.0 / refFrequency;
+        double sumPhase = 0.0;
+        int count = 0;
+        double period = 1.0 / refFrequency;
 
-    for (double t_ref : refEdges) {
-        auto it = std::lower_bound(targetEdges.begin(), targetEdges.end(), t_ref);
-        if (it != targetEdges.end() && it != targetEdges.begin()) {
-            // Use nearest edge
-            double prev = *(it - 1);
-            double next = *it;
-            double closest = (std::abs(t_ref - prev) < std::abs(t_ref - next)) ? prev : next;
-            
-            double timeDiff = closest - t_ref;
-            double phase = std::fmod(timeDiff / period * 360.0, 360.0);
-            if (phase < 0) phase += 360.0;
-            
-            sumPhase += phase;
-            count++;
+        for (double t_ref : refEdges)
+        {
+            auto it = std::lower_bound(targetEdges.begin(), targetEdges.end(), t_ref);
+            if (it != targetEdges.end() && it != targetEdges.begin())
+            {
+                // Use nearest edge
+                double prev = *(it - 1);
+                double next = *it;
+                double closest = (std::abs(t_ref - prev) < std::abs(t_ref - next)) ? prev : next;
+
+                double timeDiff = closest - t_ref;
+                double phase = std::fmod(timeDiff / period * 360.0, 360.0);
+                if (phase < 0)
+                    phase += 360.0;
+
+                sumPhase += phase;
+                count++;
+            }
         }
-    }
 
-    return (count > 0) ? sumPhase / count : -999.0;
-}
+        return (count > 0) ? sumPhase / count : -999.0;
+    }
     void MultiLogicAnalyzer::exportFrequencyData()
     {
         std::lock_guard<std::mutex> lock(m_fileMutex);
