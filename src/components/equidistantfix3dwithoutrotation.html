@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>3D Time Crystal (Fixed 3rd-Level Parent Logic)</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background: #222;
+            /* dark gray page background */
+        }
+        
+        textarea {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            width: 320px;
+            height: 120px;
+            background: #333;
+            color: #fff;
+            font-family: monospace;
+            border: 1px solid #555;
+            padding: 6px;
+            z-index: 10;
+        }
+        
+        button {
+            position: absolute;
+            top: 140px;
+            left: 10px;
+            padding: 6px 12px;
+            z-index: 10;
+        }
+    </style>
+</head>
+
+<body>
+    <textarea id="jsonInput">[
+  { "active": [8, 9] },
+  { "active": [9, 10, 11] },
+  { "active": [8, 8] }
+]</textarea>
+    <button onclick="updateVisualization()">Update</button>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+
+    <script>
+        let scene, camera, renderer, controls;
+        const spheres = [];
+
+        const totalChannels = 12;
+        const goldenAngle = Math.PI * (3 - Math.sqrt(5));
+        const initialRadius = 40; // Further reduced main sphere size
+        const decay = 0.5;
+
+        initScene();
+        drawStructure(JSON.parse(document.getElementById('jsonInput').value));
+
+        function initScene() {
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x222222);
+
+            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 1, 2000);
+            camera.position.set(0, 0, 400);
+
+            renderer = new THREE.WebGLRenderer({
+                antialias: true
+            });
+            renderer.setClearColor(0x222222, 1);
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            document.body.appendChild(renderer.domElement);
+
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+
+            // Axes
+            const axesHelper = new THREE.AxesHelper(initialRadius * 2);
+            scene.add(axesHelper);
+
+            // Adjust lighting for rough materials
+            const hemi = new THREE.HemisphereLight(0xffffff, 0x444444, 0.6);
+            hemi.position.set(0, 200, 0);
+            scene.add(hemi);
+            const dir = new THREE.DirectionalLight(0xffffff, 0.7);
+            dir.position.set(200, 200, 200);
+            scene.add(dir);
+            const ambient = new THREE.AmbientLight(0xffffff, 0.3);
+            scene.add(ambient);
+
+            window.addEventListener('resize', () => {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            });
+
+            animate();
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        function clearScene() {
+            for (const s of spheres) scene.remove(s);
+            spheres.length = 0;
+        }
+
+        function calculateOptimalChildSize(parentRadius, numChildren, level) {
+            // Ensure children are always reasonable size regardless of parent size
+            let baseChildSize;
+            
+            if (level === 0) {
+                // First layer gets good base size
+                baseChildSize = initialRadius * 0.3; // 30% of original radius
+            } else {
+                // Other levels get smaller but still reasonable
+                baseChildSize = initialRadius * (0.2 / Math.pow(1.5, level - 1));
+            }
+            
+            // Adjust for number of siblings to prevent overlap
+            const siblingFactor = Math.min(1.0, 2.0 / Math.sqrt(numChildren));
+            
+            // Calculate size but ensure it's always smaller than parent
+            const calculatedSize = baseChildSize * siblingFactor;
+            const maxAllowedSize = parentRadius * 0.7; // Never more than 70% of parent
+            
+            return Math.min(calculatedSize, maxAllowedSize);
+        }
+
+        function calculateHalfInsideDistance(parentRadius, childRadius) {
+            // For true "half inside": distance = parentRadius - childRadius/2
+            // But ensure minimum distance to avoid complete overlap
+            const halfInsideDistance = parentRadius - (childRadius * 0.5);
+            const minDistance = childRadius * 0.3; // Ensure some part sticks out
+            
+            return Math.max(halfInsideDistance, minDistance);
+        }
+
+        function sphericalPosition(center, radius, thetaDeg, phiDeg) {
+            const theta = THREE.Math.degToRad(thetaDeg);
+            const phi = THREE.Math.degToRad(phiDeg);
+            const x = center.x + radius * Math.sin(phi) * Math.cos(theta);
+            const y = center.y + radius * Math.sin(phi) * Math.sin(theta);
+            const z = center.z + radius * Math.cos(phi);
+            return new THREE.Vector3(x, y, z);
+        }
+
+        function drawStructure(config) {
+            clearScene();
+            const sphereMap = {}; // sphereMap[level][channel] = mesh
+            const root = new THREE.Vector3(0, 0, 0);
+            const rootRadius = initialRadius * 0.5; // Balanced size
+            let radius = initialRadius; // Keep original radius tracking for distance calculations
+
+            // draw root sphere - much smaller
+            const rootGeo = new THREE.SphereGeometry(rootRadius, 32, 32);
+            const rootMat = new THREE.MeshPhongMaterial({
+                color: 0xffffff,
+                transparent: true,
+                opacity: 0.15
+            });
+            const rootSphere = new THREE.Mesh(rootGeo, rootMat);
+            rootSphere.position.copy(root);
+            scene.add(rootSphere);
+            spheres.push(rootSphere);
+
+            config.forEach((device, level) => {
+                const currentMap = {};
+                const nextRadius = radius * decay; // Back to original decay calculation
+
+                // First, group children by their parent spheres
+                const childrenByParent = {};
+                
+                device.active.forEach((channel, idx, arr) => {
+                    // ★ Find closest parent (keep original logic)
+                    let parentPos = null;
+                    let parentKey = 'root';
+                    let parentSphere = null;
+                    const prevMap = sphereMap[level - 1] || {};
+                    const prevKeys = Object.keys(prevMap);
+                    
+                    if (prevKeys.length) {
+                        const closestParentChannel = findClosestParentChannel(channel, prevMap);
+                        parentPos = prevMap[closestParentChannel].position;
+                        parentKey = closestParentChannel;
+                        // Store reference to parent sphere for radius lookup
+                        parentSphere = prevMap[closestParentChannel];
+                    } else {
+                        // if immediate previous has none, scan earlier
+                        for (let pl = level - 2; pl >= 0; pl--) {
+                            const pm = sphereMap[pl] || {};
+                            if (Object.keys(pm).length) {
+                                const closestParentChannel = findClosestParentChannel(channel, pm);
+                                parentPos = pm[closestParentChannel].position;
+                                parentKey = `${pl}_${closestParentChannel}`; // Include level to avoid conflicts
+                                parentSphere = pm[closestParentChannel];
+                                break;
+                            }
+                        }
+                    }
+                    
+                    if (!childrenByParent[parentKey]) {
+                        childrenByParent[parentKey] = [];
+                    }
+                    childrenByParent[parentKey].push({
+                        channel: channel,
+                        originalIdx: idx,
+                        parentPos: parentPos || root,
+                        parentSphere: parentSphere
+                    });
+                });
+
+                // Now distribute each group evenly around their parent
+                Object.values(childrenByParent).forEach(children => {
+                    children.forEach((child, localIdx) => {
+                        const base = child.parentPos;
+                        const isRoot = (base.x === 0 && base.y === 0 && base.z === 0);
+                        
+                        // Get the actual parent radius - use stored radius if available
+                        let actualParentRadius;
+                        if (isRoot) {
+                            actualParentRadius = rootRadius;
+                        } else if (child.parentSphere && child.parentSphere.userData && child.parentSphere.userData.actualRadius) {
+                            actualParentRadius = child.parentSphere.userData.actualRadius;
+                        } else {
+                            actualParentRadius = radius; // Fallback to radius tracking
+                        }
+                        
+                        // Calculate optimal child size for this group (with level-based sizing)
+                        const totalInGroup = children.length;
+                        const optimalChildRadius = calculateOptimalChildSize(actualParentRadius, totalInGroup, level);
+                        
+                        // Calculate proper "half inside" distance
+                        const rFrom = calculateHalfInsideDistance(actualParentRadius, optimalChildRadius);
+                        
+                        // Use equidistant distribution logic for this group around their parent
+                        let thetaDeg, phiDeg;
+                        
+                        // Apply same equidistant logic as siblings
+                        if (totalInGroup === 1) {
+                            thetaDeg = 0;
+                            phiDeg = 90;
+                        } else if (totalInGroup === 2) {
+                            thetaDeg = 0;
+                            phiDeg = localIdx === 0 ? 0 : 180;
+                        } else if (totalInGroup === 3) {
+                            thetaDeg = (360 / 3) * localIdx;
+                            phiDeg = 90;
+                        } else if (totalInGroup === 4) {
+                            const coords = [
+                                [0, 0, 1], [0.943, 0, -0.333],
+                                [-0.471, 0.816, -0.333], [-0.471, -0.816, -0.333]
+                            ];
+                            const [x, y, z] = coords[localIdx];
+                            thetaDeg = THREE.Math.radToDeg(Math.atan2(y, x));
+                            phiDeg = THREE.Math.radToDeg(Math.acos(z));
+                            if (thetaDeg < 0) thetaDeg += 360;
+                        } else if (totalInGroup === 5) {
+                            if (localIdx === 0) {
+                                thetaDeg = 0;
+                                phiDeg = 30;
+                            } else {
+                                thetaDeg = (360 / 4) * (localIdx - 1);
+                                phiDeg = 90;
+                            }
+                        } else if (totalInGroup === 6) {
+                            const coords = [
+                                [0, 0, 1], [0, 0, -1], [1, 0, 0], 
+                                [-1, 0, 0], [0, 1, 0], [0, -1, 0]
+                            ];
+                            const [x, y, z] = coords[localIdx];
+                            thetaDeg = THREE.Math.radToDeg(Math.atan2(y, x));
+                            phiDeg = THREE.Math.radToDeg(Math.acos(z));
+                            if (thetaDeg < 0) thetaDeg += 360;
+                        } else if (totalInGroup === 8) {
+                            const s = 1 / Math.sqrt(3);
+                            const coords = [
+                                [s, s, s], [s, s, -s], [s, -s, s], [s, -s, -s],
+                                [-s, s, s], [-s, s, -s], [-s, -s, s], [-s, -s, -s]
+                            ];
+                            const [x, y, z] = coords[localIdx];
+                            thetaDeg = THREE.Math.radToDeg(Math.atan2(y, x));
+                            phiDeg = THREE.Math.radToDeg(Math.acos(z));
+                            if (thetaDeg < 0) thetaDeg += 360;
+                        } else {
+                            const goldenAngle = Math.PI * (3 - Math.sqrt(5));
+                            const y = 1 - (2 * localIdx / (totalInGroup - 1));
+                            const radiusAtY = Math.sqrt(1 - y * y);
+                            const theta = goldenAngle * localIdx;
+                            const x = radiusAtY * Math.cos(theta);
+                            const z = radiusAtY * Math.sin(theta);
+                            
+                            thetaDeg = THREE.Math.radToDeg(Math.atan2(z, x));
+                            phiDeg = THREE.Math.radToDeg(Math.acos(y));
+                            if (thetaDeg < 0) thetaDeg += 360;
+                        }
+
+                        const pos = sphericalPosition(base, rFrom, thetaDeg, phiDeg);
+
+                        const geo = new THREE.SphereGeometry(optimalChildRadius, 16, 16);
+                        const mat = new THREE.MeshPhongMaterial({
+                            color: new THREE.Color(`hsl(${(level * 60) % 360},70%,50%)`),
+                            shininess: 8, // Very rough surface
+                            specular: 0x333333, // Dark specular for matte look
+                            transparent: true,
+                            opacity: 0.85 - (level * 0.1), // Much more opaque
+                            side: THREE.DoubleSide
+                        });
+                        const mesh = new THREE.Mesh(geo, mat);
+                        mesh.position.copy(pos);
+                        scene.add(mesh);
+                        spheres.push(mesh);
+
+                        currentMap[child.channel] = mesh;
+                        
+                        // Store the actual radius for this sphere for future parent calculations
+                        if (!currentMap[child.channel].userData) {
+                            currentMap[child.channel].userData = {};
+                        }
+                        currentMap[child.channel].userData.actualRadius = optimalChildRadius;
+                    });
+                });
+
+                sphereMap[level] = currentMap;
+                radius = nextRadius; // Back to original radius progression
+            });
+        }
+
+        // cyclic distance on a 12-channel ring
+        function channelDistance(a, b) {
+            const d = Math.abs(a - b);
+            return Math.min(d, totalChannels - d);
+        }
+
+        // pick the parent channel whose channel ID is nearest to `channel`
+        function findClosestParentChannel(channel, parentMap) {
+            const keys = Object.keys(parentMap).map(Number);
+            let best = keys[0],
+                bestD = channelDistance(channel, best);
+            for (let i = 1; i < keys.length; i++) {
+                const c = keys[i],
+                    d = channelDistance(channel, c);
+                if (d < bestD) {
+                    best = c;
+                    bestD = d;
+                }
+            }
+            return best;
+        }
+
+        function updateVisualization() {
+            try {
+                drawStructure(JSON.parse(document.getElementById("jsonInput").value));
+            } catch {
+                alert("Invalid JSON.");
+            }
+        }
+    </script>
+</body>
+
+</html>

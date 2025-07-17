@@ -1,0 +1,113 @@
+{
+  "dataFilePath": "/data/logic_data.txt",
+  "updateInterval": 1500,
+  "showInactiveOverlay": true,
+  "useGroupedConnection": false,
+  "groupSwitchDelayMs": 500,
+  "groupSize": 6,
+  "defaultSampleRate": 8,
+  "defaultSampleDepth": 200000,
+  "defaultScanInterval": 100,
+  "defaultVoltageThreshold": 0.98,
+  "defaultEnableTrigger": false,
+  "defaultTriggerChannel": 0,
+  "defaultTriggerRisingEdge": true,
+  "deviceSettings": [
+    {
+      "enabled": true,
+      "name": "LA1",
+      "sampleRateCode": 12,
+      "sampleDepth": 1000000,
+      "scanIntervalMs": 100,
+      "voltageThreshold": 0.98
+    },
+    {
+      "enabled": true,
+      "name": "LA2",
+      "sampleRateCode": 4,
+      "sampleDepth": 1000000,
+      "scanIntervalMs": 100,
+      "voltageThreshold": 0.98
+    },
+    {
+      "enabled": true,
+      "name": "LA3",
+      "sampleRateCode": 7,
+      "sampleDepth": 1000000,
+      "scanIntervalMs": 100,
+      "voltageThreshold": 0.98
+    },
+    {
+      "enabled": true,
+      "name": "LA4",
+      "sampleRateCode": 9,
+      "sampleDepth": 500000,
+      "scanIntervalMs": 100,
+      "voltageThreshold": 0.98
+    },
+    {
+      "enabled": true,
+      "name": "LA5",
+      "sampleRateCode": 12,
+      "sampleDepth": 500000,
+      "scanIntervalMs": 100,
+      "voltageThreshold": 0.98
+    },
+    {
+      "enabled": true,
+      "name": "LA6",
+      "sampleRateCode": 8,
+      "sampleDepth": 200000,
+      "scanIntervalMs": 100,
+      "voltageThreshold": 0.98
+    },
+    {
+      "enabled": true,
+      "name": "LA7",
+      "sampleRateCode": 8,
+      "sampleDepth": 200000,
+      "scanIntervalMs": 100,
+      "voltageThreshold": 0.98
+    },
+    {
+      "enabled": true,
+      "name": "LA8",
+      "sampleRateCode": 8,
+      "sampleDepth": 200000,
+      "scanIntervalMs": 100,
+      "voltageThreshold": 0.98
+    },
+    {
+      "enabled": true,
+      "name": "LA9",
+      "sampleRateCode": 8,
+      "sampleDepth": 200000,
+      "scanIntervalMs": 100,
+      "voltageThreshold": 0.98
+    },
+    {
+      "enabled": true,
+      "name": "LA10",
+      "sampleRateCode": 8,
+      "sampleDepth": 200000,
+      "scanIntervalMs": 100,
+      "voltageThreshold": 0.98
+    },
+    {
+      "enabled": true,
+      "name": "LA11",
+      "sampleRateCode": 8,
+      "sampleDepth": 200000,
+      "scanIntervalMs": 100,
+      "voltageThreshold": 0.98
+    },
+    {
+      "enabled": true,
+      "name": "LA12",
+      "sampleRateCode": 8,
+      "sampleDepth": 200000,
+      "scanIntervalMs": 100,
+      "voltageThreshold": 0.98
+    }
+  ]
+}

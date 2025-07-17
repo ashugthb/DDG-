@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Understanding FIR vs IIR Filters: A Visual Guide</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+            color: #333;
+        }
+        h1 {
+            color: #2c3e50;
+            text-align: center;
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 10px;
+        }
+        h2 {
+            color: #2980b9;
+            border-left: 4px solid #3498db;
+            padding-left: 10px;
+        }
+        h3 {
+            color: #16a085;
+        }
+        .filter-box {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 5px;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        .comparison {
+            display: flex;
+            justify-content: space-between;
+            margin: 20px 0;
+        }
+        .comparison-column {
+            width: 48%;
+            padding: 10px;
+            background-color: #f0f8ff;
+            border-radius: 5px;
+        }
+        .comparison-column.fir {
+            background-color: #e6f7ff;
+        }
+        .comparison-column.iir {
+            background-color: #fff0f5;
+        }
+        .image-container {
+            text-align: center;
+            margin: 20px 0;
+        }
+        .caption {
+            font-style: italic;
+            text-align: center;
+            margin-top: 5px;
+            color: #666;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+        .example-box {
+            background-color: #f9f9f9;
+            border-left: 3px solid #2ecc71;
+            padding: 10px 15px;
+            margin: 15px 0;
+        }
+        code {
+            background-color: #f8f8f8;
+            padding: 2px 4px;
+            border-radius: 3px;
+            font-family: Consolas, monospace;
+        }
+    </style>
+</head>
+<body>
+    <h1>Understanding FIR vs IIR Filters: A Visual Guide</h1>
+    
+    <div class="filter-box">
+        <h2>Basic Filter Concepts: FIR vs IIR</h2>
+        
+        <div class="comparison">
+            <div class="comparison-column fir">
+                <h3>FIR Filters (Finite Impulse Response)</h3>
+                <p><strong>Key Characteristic:</strong> The impulse response settles to zero in a finite number of samples.</p>
+                <p><strong>Memory:</strong> Only depends on current and past inputs (no feedback)</p>
+                <div class="image-container">
+                    <img src="https://example.com/fir_block_diagram.png" alt="FIR Filter Block Diagram">
+                    <p class="caption">FIR filters use a series of delayed inputs multiplied by coefficients (taps)</p>
+                </div>
+            </div>
+            <div class="comparison-column iir">
+                <h3>IIR Filters (Infinite Impulse Response)</h3>
+                <p><strong>Key Characteristic:</strong> The impulse response continues indefinitely (theoretically forever).</p>
+                <p><strong>Memory:</strong> Depends on both inputs AND previous outputs (has feedback)</p>
+                <div class="image-container">
+                    <img src="https://example.com/iir_block_diagram.png" alt="IIR Filter Block Diagram">
+                    <p class="caption">IIR filters include feedback paths, creating a recursive structure</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <h2>Visual Comparison: Time Domain Response</h2>
+    
+    <div class="image-container">
+        <img src="https://example.com/impulse_responses.png" alt="Impulse Responses">
+        <p class="caption">Impulse responses of FIR (blue) vs IIR (red) filters. Notice how the FIR response ends after N samples, while the IIR response continues indefinitely.</p>
+    </div>
+
+    <div class="example-box">
+        <h3>Real-World Analogy: Water Tank Systems</h3>
+        <p><strong>FIR Filter:</strong> Like a series of water tanks where water flows through each tank and moves to the next. Once water enters the first tank, it takes exactly N steps to exit the system completely.</p>
+        <p><strong>IIR Filter:</strong> Like a water tank with a small hole at the bottom and a portion of the output being recycled back into the input. Water continues to drain indefinitely, though the amount gets smaller over time.</p>
+    </div>
+
+    <h2>Frequency Domain: How They Shape Signals</h2>
+    
+    <div class="image-container">
+        <img src="https://example.com/frequency_responses.png" alt="Frequency Responses">
+        <p class="caption">Magnitude responses of comparable FIR (blue) and IIR (red) lowpass filters. Note the IIR filter achieves a sharper cutoff with fewer coefficients.</p>
+    </div>
+
+    <div class="image-container">
+        <img src="https://example.com/phase_responses.png" alt="Phase Responses">
+        <p class="caption">Phase responses: FIR filters can have linear phase (straight line, blue), while IIR filters always have nonlinear phase (curved, red).</p>
+    </div>
+
+    <div class="example-box">
+        <h3>What These Graphs Tell You:</h3>
+        <ul>
+            <li><strong>Magnitude Response:</strong> Shows which frequencies pass through and which are attenuated</li>
+            <li><strong>Phase Response:</strong> Shows how the filter shifts the timing of different frequency components</li>
+            <li><strong>Linear Phase (FIR):</strong> All frequencies are delayed by the same amount (prevents distortion)</li>
+            <li><strong>Nonlinear Phase (IIR):</strong> Different frequencies experience different delays (can cause distortion)</li>
+        </ul>
+    </div>
+
+    <h2>Step Response: Seeing Transient Behavior</h2>
+    
+    <div class="image-container">
+        <img src="https://example.com/step_responses.png" alt="Step Responses">
+        <p class="caption">Step responses: FIR (blue) reaches steady state after exactly N samples. IIR (red) approaches steady state gradually but may overshoot or ring.</p>
+    </div>
+
+    <div class="example-box">
+        <h3>What Step Response Tells You:</h3>
+        <p>The step response reveals how a filter reacts to sudden changes in the input signal:</p>
+        <ul>
+            <li><strong>Rise Time:</strong> How quickly the filter responds to changes</li>
+            <li><strong>Overshoot:</strong> Whether the response exceeds its final value</li>
+            <li><strong>Ringing:</strong> Oscillations that occur after a sudden change</li>
+            <li><strong>Settling Time:</strong> How long until the output stabilizes</li>
+        </ul>
+    </div>
+
+    <h2>Filter Types Visualized</h2>
+    
+    <div class="image-container">
+        <img src="https://example.com/filter_types.png" alt="Filter Types">
+        <p class="caption">Frequency responses of different filter types: Lowpass, Highpass, Bandpass, and Bandstop</p>
+    </div>
+
+    <table>
+        <tr>
+            <th>Filter Type</th>
+            <th>FIR Implementation</th>
+            <th>IIR Implementation</th>
+            <th>Typical Application</th>
+        </tr>
+        <tr>
+            <td>Lowpass</td>
+            <td>Requires many taps for sharp cutoff</td>
+            <td>Sharp cutoff with few coefficients</td>
+            <td>Removing high-frequency noise</td>
+        </tr>
+        <tr>
+            <td>Highpass</td>
+            <td>Linear phase preserves timing</td>
+            <td>More efficient but nonlinear phase</td>
+            <td>Removing DC offset or low-frequency drift</td>
+        </tr>
+        <tr>
+            <td>Bandpass</td>
+            <td>Precise control of passband shape</td>
+            <td>Higher Q-factor with fewer coefficients</td>
+            <td>Isolating signals in specific frequency range</td>
+        </tr>
+        <tr>
+            <td>Bandstop</td>
+            <td>Guaranteed stability</td>
+            <td>Deeper notches with fewer coefficients</td>
+            <td>Removing power line interference (50/60Hz)</td>
+        </tr>
+    </table>
+
+    <h2>Real-World Filter Examples</h2>
+    
+    <h3>Example 1: Noisy Sine Wave Filtering</h3>
+    
+    <div class="image-container">
+        <img src="https://example.com/sine_filtering.png" alt="Sine Wave Filtering">
+        <p class="caption">Original noisy sine wave (top), FIR filtered (middle), and IIR filtered (bottom)</p>
+    </div>
+
+    <div class="example-box">
+        <h3>Observations:</h3>
+        <ul>
+            <li>FIR filter has a delay of exactly N/2 samples (group delay)</li>
+            <li>IIR filter responds more quickly but with slight phase distortion</li>
+            <li>Both successfully remove high-frequency noise</li>
+        </ul>
+    </div>
+
+    <h3>Example 2: Step Response in Audio Processing</h3>
+    
+    <div class="image-container">
+        <img src="https://example.com/audio_step.png" alt="Audio Step Response">
+        <p class="caption">Original audio transient (top), FIR filtered (middle), and IIR filtered (bottom)</p>
+    </div>
+
+    <div class="example-box">
+        <h3>Observations:</h3>
+        <ul>
+            <li>FIR filter preserves the shape of the transient but delays it</li>
+            <li>IIR filter responds faster but shows some ringing artifacts</li>
+            <li>The choice depends on whether timing preservation or quick response is more important</li>
+        </ul>
+    </div>
+
+    <h2>Filter Order Comparison</h2>
+    
+    <div class="image-container">
+        <img src="https://example.com/order_comparison.png" alt="Filter Order Comparison">
+        <p class="caption">Frequency responses of 20th order FIR filter vs 4th order IIR filter with similar cutoff characteristics</p>
+    </div>
+
+    <div class="example-box">
+        <h3>Key Takeaway:</h3>
+        <p>IIR filters can achieve sharp frequency cutoffs with far fewer coefficients than FIR filters, making them more computationally efficient for many applications.</p>
+    </div>
+
+    <h2>When to Choose Which Filter Type</h2>
+    
+    <table>
+        <tr>
+            <th>Choose FIR When You Need:</th>
+            <th>Choose IIR When You Need:</th>
+        </tr>
+        <tr>
+            <td>Linear phase (no phase distortion)</td>
+            <td>Efficient implementation (fewer coefficients)</td>
+        </tr>
+        <tr>
+            <td>Guaranteed stability</td>
+            <td>Sharp cutoff characteristics</td>
+        </tr>
+        <tr>
+            <td>Precise control of frequency response</td>
+            <td>To model analog filters digitally</td>
+        </tr>
+        <tr>
+            <td>Easy implementation for multirate systems</td>
+            <td>High Q-factor filters (narrow bandpass)</td>
+        </tr>
+        <tr>
+            <td>No feedback paths that could cause limit cycles</td>
+            <td>Lower processing latency</td>
+        </tr>
+    </table>
+
+    <h2>Simple Implementation Examples</h2>
+    
+    <div class="example-box">
+        <h3>FIR Filter Implementation (C code):</h3>
+        <pre><code>
+// FIR filter implementation
+float fir_filter(float input) {
+    // Shift the delay line
+    for (int i = NUM_TAPS-1; i > 0; i--) {
+        delay_line[i] = delay_line[i-1];
+    }
+    
+    // Add the new input
+    delay_line[0] = input;
+    
+    // Compute the output
+    float output = 0;
+    for (int i = 0; i < NUM_TAPS; i++) {
+        output += coefficients[i] * delay_line[i];
+    }
+    
+    return output;
+}
+        </code></pre>
+    </div>
+
+    <div class="example-box">
+        <h3>IIR Filter Implementation (C code):</h3>
+        <pre><code>
+// Biquad IIR filter implementation
+float iir_filter(float input) {
+    // Direct Form II implementation
+    float w = input - (a1 * w1) - (a2 * w2);
+    float output = b0 * w + b1 * w1 + b2 * w2;
+    
+    // Update delay elements
+    w2 = w1;
+    w1 = w;
+    
+    return output;
+}
+        </code></pre>
+    </div>
+
+    <h2>Conclusion</h2>
+    <p>Understanding the differences between FIR and IIR filters helps you choose the right tool for your signal processing tasks. FIR filters offer linear phase and guaranteed stability at the cost of higher computational requirements, while IIR filters provide efficient implementation with sharper frequency responses but introduce phase distortion.</p>
+    
+    <p>The visual representations in this guide should help you build intuition about how these filters behave in both time and frequency domains, allowing you to make informed decisions when designing your DSP systems.</p>
+</body>
+</html>

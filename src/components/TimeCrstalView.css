@@ -1,0 +1,185 @@
+:root {
+            --bg: #12131a;
+            --fg: #e0e0e0;
+            --primary: #00ffc3;
+            --secondary: #ff4d6d;
+            --panel-bg: rgba(255, 255, 255, 0.04);
+            --panel-border: rgba(255, 255, 255, 0.12);
+            --highlight: rgba(0, 255, 195, 0.2);
+            --grid-gap: 4px;
+            --radius: 6px;
+        }
+        
+        * {
+            box-sizing: border-box;
+        }
+        
+        body {
+            margin: 0;
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+            background: var(--bg);
+            color: var(--fg);
+            font-family: 'Roboto', sans-serif;
+        }
+        
+        #viewer {
+            flex: 2;
+            position: relative;
+            border-right: 1px solid var(--panel-border);
+        }
+        
+        #toolbar {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            display: flex;
+            gap: 8px;
+            background: var(--panel-bg);
+            padding: 8px 12px;
+            border: 1px solid var(--panel-border);
+            border-radius: var(--radius);
+            backdrop-filter: blur(10px);
+            z-index: 10;
+        }
+        
+        #toolbar button,
+        #toolbar input[type=range] {
+            background: transparent;
+            border: none;
+            color: var(--primary);
+            font-size: 0.9em;
+            cursor: pointer;
+            padding: 4px 8px;
+            border-radius: var(--radius);
+            transition: background .2s;
+        }
+        
+        #toolbar button:hover,
+        #toolbar input[type=range]:hover {
+            background: var(--highlight);
+        }
+        
+        #toolbar label {
+            font-size: 0.85em;
+            color: var(--fg);
+            padding: 4px;
+        }
+        
+        #sidebar {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            padding: 24px;
+            background: var(--panel-bg);
+            border-left: 1px solid var(--panel-border);
+            backdrop-filter: blur(10px);
+        }
+        
+        h1 {
+            margin-bottom: 16px;
+            text-align: center;
+            font-weight: 300;
+            color: var(--primary);
+        }
+        
+        .tabs {
+            display: flex;
+            gap: 4px;
+            margin-bottom: 12px;
+        }
+        
+        .tabs button {
+            flex: 1;
+            background: transparent;
+            border: 1px solid var(--panel-border);
+            padding: 8px;
+            border-radius: var(--radius);
+            color: var(--fg);
+            cursor: pointer;
+            transition: background .2s;
+        }
+        
+        .tabs button.active {
+            background: var(--highlight);
+            border-color: var(--primary);
+            color: var(--primary);
+        }
+        
+        .panel {
+            flex: 1;
+            overflow-y: auto;
+        }
+        
+        #jsonPanel textarea {
+            width: 100%;
+            height: 100%;
+            background: var(--panel-bg);
+            border: 1px solid var(--panel-border);
+            border-radius: var(--radius);
+            color: var(--fg);
+            font-family: monospace;
+            padding: 12px;
+            resize: none;
+        }
+        
+        #jsonPanel button {
+            margin-top: 8px;
+            padding: 10px;
+            border: none;
+            background: var(--secondary);
+            color: var(--bg);
+            border-radius: var(--radius);
+            cursor: pointer;
+            font-weight: 500;
+            width: 100%;
+            transition: background .2s;
+        }
+        
+        #jsonPanel button:hover {
+            background: var(--primary);
+            color: var(--bg);
+        }
+        
+        #gridPanel {
+            display: grid;
+            grid-template-columns: repeat(13, 1fr);
+            gap: var(--grid-gap);
+        }
+        
+        #gridPanel .cell {
+            background: var(--panel-bg);
+            border: 1px solid var(--panel-border);
+            border-radius: var(--radius);
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.75em;
+            position: relative;
+            transition: background .2s, box-shadow .2s;
+        }
+        
+        #gridPanel .cell.header {
+            background: transparent;
+            border: none;
+            color: var(--primary);
+            font-weight: 500;
+        }
+        
+        #gridPanel .cell.active {
+            background: var(--primary);
+            box-shadow: 0 0 6px var(--primary);
+            color: var(--bg);
+        }
+        
+        #gridPanel .cell:hover {
+            background: var(--highlight);
+        }
+        
+        #gridPanel .count {
+            background: var(--panel-bg);
+            color: var(--secondary);
+            font-weight: 500;
+        }
