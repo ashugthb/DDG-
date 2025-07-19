@@ -1,6 +1,6 @@
 export const BRAIN_DETAIL_URL = process.env.NODE_ENV === 'development'
-  ? "http://localhost:3000/brain-detail"
-  : "/brain-detail";
+  ? 'http://localhost:3000/brain-detail'
+  : `${process.env.NEXT_PUBLIC_BASE_PATH || ''}/brain-detail`;
 
 export const COLOR_SCALES = {
   default: {
