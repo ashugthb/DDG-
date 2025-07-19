@@ -73,7 +73,7 @@ struct AnalyzerConfig
 
     // Default values
     AnalyzerConfig()
-        : sampleRateCode(8), sampleDepth(100000), scanIntervalMs(100), voltageThreshold(0.98),
+        : sampleRateCode(8), sampleDepth(100000), scanIntervalMs(100), voltageThreshold(1.7),
           enableTrigger(false), triggerChannel(0), triggerRisingEdge(true),
           configFilePath("logic_config.txt"), serialNumber("Unknown"), model("Unknown")
     {
@@ -136,21 +136,11 @@ struct ChannelData
     std::chrono::system_clock::time_point lastChangeTime;
     std::vector<int> sliceTransitions;       // Transitions per time slice
     std::vector<double> sliceActivityLevels; // Activity level per slice (0-100)
-    double instantaneousPhase;               // For phase analysis
-    double frequency;                        // Frequency analysis
-    std::vector<double> risingEdgeTimes;     // Timestamps of rising edges
-    double phaseOffset;                      // Relative to reference channel
-    std::vector<double> frequencyBandMagnitudes;
-    std::vector<double> slicePhases;
 
-    ChannelData() : changed(false), currentState(0), instantaneousPhase(0.0), frequency(0.0), phaseOffset(0.0), transitions(0), totalTransitions(0)
+    ChannelData() : changed(false), currentState(0), transitions(0), totalTransitions(0)
     {
         sliceTransitions.resize(5, 0); // Default 5 slices
         sliceActivityLevels.resize(5, 0.0);
-        frequencyBandMagnitudes.resize(12, 0.0);
-        instantaneousPhase = 0.0;
-        frequency = 0.0;
-        slicePhases.resize(5, -999.0);
     }
 };
 
@@ -748,60 +738,6 @@ private:
     ReadSrcDataFunc m_ReadSrcData = nullptr;
     SetPreTriFunc m_SetPreTri = nullptr;
 };
-// FFT implementation (add before MultiLogicAnalyzer class)
-namespace FFT
-{
-    void fft(std::vector<std::complex<double>> &x)
-    {
-        int n = x.size();
-        for (int i = 1, j = 0; i < n; i++)
-        {
-            int bit = n >> 1;
-            while (j >= bit)
-            {
-                j -= bit;
-                bit >>= 1;
-            }
-            j += bit;
-            if (i < j)
-                std::swap(x[i], x[j]);
-        }
-
-        for (int len = 2; len <= n; len <<= 1)
-        {
-            double angle = -2 * M_PI / len;
-            std::complex<double> wlen(cos(angle), sin(angle));
-            for (int i = 0; i < n; i += len)
-            {
-                std::complex<double> w(1);
-                for (int j = 0; j < len / 2; j++)
-                {
-                    std::complex<double> u = x[i + j];
-                    std::complex<double> v = x[i + j + len / 2] * w;
-                    x[i + j] = u + v;
-                    x[i + j + len / 2] = u - v;
-                    w *= wlen;
-                }
-            }
-        }
-    }
-
-    void rfft(const std::vector<double> &input, std::vector<double> &magnitudes)
-    {
-        int n = input.size();
-        std::vector<std::complex<double>> x(n);
-        for (int i = 0; i < n; i++)
-        {
-            x[i] = std::complex<double>(input[i], 0.0);
-        }
-        fft(x);
-        magnitudes.resize(n / 2 + 1);
-        for (int i = 0; i <= n / 2; i++)
-        {
-            magnitudes[i] = std::abs(x[i]);
-        }
-    }
-}
 
 // Multi-Device Logic Analyzer class
 class MultiLogicAnalyzer
@@ -1628,24 +1564,6 @@ public:
                     lastState = currentState;
                 }
             }
-            // Record rising edges (first 12 channels only)
-            state.channelData[ch].risingEdgeTimes.clear();
-            int risingEdges = 0;
-            if (ch < 12) // Only for channels 0-11
-            {
-                for (size_t i = 1; i < totalSamples; i++)
-                {
-                    uint32_t currentState = (capturedData[i] >> ch) & 1;
-                    if (currentState == 1 && lastState == 0)
-                    {
-                        double time = i * (1.0 / samplingRate); // Convert sample index to time
-                        state.channelData[ch].risingEdgeTimes.push_back(time);
-                        risingEdges++;
-                    }
-                    lastState = currentState;
-                }
-            }
-
             // Process each time slice
             for (int slice = 0; slice < numSlices; slice++)
             {
@@ -1673,78 +1591,7 @@ public:
                     std::min<double>(100.0, (sliceTransitions / maxPossible) * 1000.0);
             }
 
-            if (ch == 0)
-            {
-                // Reference channel (ch0) has 0 phase by definition
-                for (int slice = 0; slice < numSlices; slice++)
-                {
-                    state.channelData[ch].slicePhases[slice] = 0.0;
-                }
-            }
-            else
-            {
-                for (int slice = 0; slice < numSlices; slice++)
-                {
-                    size_t start = slice * samplesPerSlice;
-                    size_t end = (slice == numSlices - 1) ? totalSamples : (slice + 1) * samplesPerSlice;
-
-                    // Calculate time boundaries for this slice
-                    double startTime = start * (1.0 / samplingRate);
-                    double endTime = end * (1.0 / samplingRate);
-                    auto &risingEdges = state.channelData[ch].risingEdgeTimes;
-                    risingEdges.clear(); // Clear previous edges
-                    uint32_t lastState = (capturedData[0] >> ch) & 1;
-                    for (size_t i = 1; i < totalSamples; i++)
-                    {
-                        uint32_t currentState = (capturedData[i] >> ch) & 1;
-                        if (currentState != lastState)
-                        {
-                            transitions++;
-                            // Record rising edges for channels 0-11
-                            if (ch < 12 && lastState == 0 && currentState == 1)
-                            {
-                                double time = i * (1.0 / samplingRate); // Convert sample index to time
-                                risingEdges.push_back(time);
-                            }
-                            lastState = currentState;
-                        }
-                    }
-
-                    // Find all reference edges in this slice
-                    std::vector<double> sliceRefEdges;
-                    for (double edge : state.channelData[0].risingEdgeTimes)
-                    {
-                        if (edge >= startTime && edge < endTime)
-                        {
-                            sliceRefEdges.push_back(edge);
-                        }
-                    }
-
-                    // Find all target edges in this slice
-                    std::vector<double> sliceTargetEdges;
-                    for (double edge : state.channelData[ch].risingEdgeTimes)
-                    {
-                        if (edge >= startTime && edge < endTime)
-                        {
-                            sliceTargetEdges.push_back(edge);
-                        }
-                    }
-
-                    // Calculate phase if we have enough data
-                    if (sliceRefEdges.size() >= 2 && !sliceTargetEdges.empty())
-                    {
-                        double T_ref = (sliceRefEdges.back() - sliceRefEdges.front()) /
-                                       (sliceRefEdges.size() - 1);
-                        state.channelData[ch].slicePhases[slice] =
-                            computePhaseDifference(sliceRefEdges, sliceTargetEdges, 1.0 / T_ref);
-                    }
-                    else
-                    {
-                        state.channelData[ch].slicePhases[slice] = -999.0; // Mark invalid
-                    }
-                }
-            }
-
+        
             // Store current state
             state.channelData[ch].currentState = lastState;
             state.channelData[ch].transitions = transitions;
@@ -1774,193 +1621,14 @@ public:
             // Store raw sample data
             state.channelData[ch].samples = capturedData;
         }
-        computeFrequencyAnalysis(deviceIndex, capturedData);
-
+        
         // Export data to file for this device
         exportDeviceData(deviceIndex);
-        exportFrequencyData();
     }
-    void MultiLogicAnalyzer::computeFrequencyAnalysis(int deviceIndex, const std::vector<uint32_t> &capturedData)
-    {
-        const int FFT_WINDOW_SIZE = 2048; // Power of two
-        DeviceState &state = m_deviceStates[deviceIndex];
-        double sampleRate = m_deviceSamplingRates[deviceIndex];
-        double nyquist = sampleRate / 2.0;
-
-        if (capturedData.size() < FFT_WINDOW_SIZE)
-            return;
-
-        // Use last 1024 samples for FFT
-        size_t startIndex = capturedData.size() - FFT_WINDOW_SIZE;
-
-        for (int ch = 0; ch < 12; ch++)
-        {
-            // Extract binary signal
-            std::vector<double> signal(FFT_WINDOW_SIZE);
-            for (int i = 0; i < FFT_WINDOW_SIZE; i++)
-            {
-                signal[i] = (capturedData[startIndex + i] >> ch) & 1 ? 1.0 : 0.0;
-            }
-
-            // Apply Hann window
-            for (int i = 0; i < FFT_WINDOW_SIZE; i++)
-            {
-                double hann = 0.5 * (1 - cos(2 * M_PI * i / (FFT_WINDOW_SIZE - 1)));
-                signal[i] *= hann;
-            }
-
-            // Compute FFT magnitudes
-            std::vector<double> magnitudes;
-            FFT::rfft(signal, magnitudes);
-
-            // Reset band magnitudes
-            state.channelData[ch].frequencyBandMagnitudes.assign(12, 0.0);
-
-            // Compute band energies
-            double df = sampleRate / FFT_WINDOW_SIZE;
-            for (int band = 0; band < FREQUENCY_BANDS.size(); band++)
-            {
-                double bandStart = FREQUENCY_BANDS[band].first;
-                double bandEnd = FREQUENCY_BANDS[band].second;
-
-                // Skip bands above Nyquist
-                if (bandStart > nyquist)
-                    continue;
-                bandEnd = std::min(bandEnd, nyquist);
-
-                int startBin = std::max(1, static_cast<int>(bandStart / df));
-                int endBin = std::min(static_cast<int>(magnitudes.size() - 1),
-                                      static_cast<int>(bandEnd / df));
-
-                // Find peak magnitude in band
-                double peak = 0.0;
-                double sum = 0.0;
-                int count = 0;
-                for (int bin = startBin; bin <= endBin; bin++)
-                {
-                    sum += magnitudes[bin];
-                    count++;
-                }
-                state.channelData[ch].frequencyBandMagnitudes[band] = (count > 0) ? (sum / count) : 0.0;
-            }
-        }
-    }
-    void calculatePhaseRelationships(int deviceIndex)
-    {
-        DeviceState &state = m_deviceStates[deviceIndex];
-        auto &refEdges = state.channelData[0].risingEdgeTimes;
-
-        // Skip if insufficient reference edges
-        if (refEdges.size() < 2)
-        {
-            for (int ch = 1; ch < 12; ch++)
-                state.channelData[ch].phaseOffset = -999.0;
-            return;
-        }
-
-        // Calculate reference period (T)
-        double T_ref = (refEdges.back() - refEdges.front()) / (refEdges.size() - 1);
-
-        // For channels 1-11
-        for (int ch = 1; ch < 12; ch++)
-        {
-            auto &targetEdges = state.channelData[ch].risingEdgeTimes;
-            if (targetEdges.empty())
-            {
-                state.channelData[ch].phaseOffset = -999.0;
-                continue;
-            }
-
-            double sumPhase = 0.0;
-            int count = 0;
-            for (double t_ref : refEdges)
-            {
-                // Find next target edge after t_ref
-                auto it = std::lower_bound(targetEdges.begin(), targetEdges.end(), t_ref);
-                if (it != targetEdges.end())
-                {
-                    double dt = *it - t_ref;
-                    double phase = std::fmod((dt / T_ref) * 360.0, 360.0);
-                    sumPhase += phase;
-                    count++;
-                }
-            }
-            state.channelData[ch].phaseOffset = (count > 0) ? (sumPhase / count) : -999.0;
-        }
-    }
-    double computePhaseDifference(
-        const std::vector<double> &refEdges,
-        const std::vector<double> &targetEdges,
-        double refFrequency)
-    {
-        if (refEdges.size() < 2 || targetEdges.empty())
-            return -999.0;
-
-        double sumPhase = 0.0;
-        int count = 0;
-        double period = 1.0 / refFrequency;
-
-        for (double t_ref : refEdges)
-        {
-            auto it = std::lower_bound(targetEdges.begin(), targetEdges.end(), t_ref);
-            if (it != targetEdges.end() && it != targetEdges.begin())
-            {
-                // Use nearest edge
-                double prev = *(it - 1);
-                double next = *it;
-                double closest = (std::abs(t_ref - prev) < std::abs(t_ref - next)) ? prev : next;
-
-                double timeDiff = closest - t_ref;
-                double phase = std::fmod(timeDiff / period * 360.0, 360.0);
-                if (phase < 0)
-                    phase += 360.0;
-
-                sumPhase += phase;
-                count++;
-            }
-        }
-
-        return (count > 0) ? sumPhase / count : -999.0;
-    }
-    void MultiLogicAnalyzer::exportFrequencyData()
-    {
-        std::lock_guard<std::mutex> lock(m_fileMutex);
-        std::string path = OUTPUT_DIRECTORY + "\\frequency_data.txt";
-        std::ofstream outFile(path);
-
-        if (!outFile.is_open())
-        {
-            std::cerr << "Failed to open frequency data file: " << path << std::endl;
-            return;
-        }
-
-        // Header
-        outFile << "device,channel";
-        for (int band = 0; band < 12; band++)
-        {
-            outFile << ",band" << band;
-        }
-        outFile << "\n";
-
-        // Data
-        for (int dev = 0; dev < m_numDevices; dev++)
-        {
-            if (!m_deviceStates[dev].connected)
-                continue;
-
-            for (int ch = 0; ch < 12; ch++)
-            {
-                outFile << dev << "," << ch;
-                const auto &mags = m_deviceStates[dev].channelData[ch].frequencyBandMagnitudes;
-                for (double mag : mags)
-                {
-                    outFile << "," << std::fixed << std::setprecision(2) << mag;
-                }
-                outFile << "\n";
-            }
-        }
-        outFile.close();
-    }
+    
+    
+   
+    
     void exportTimeSlicedData()
     {
         std::lock_guard<std::mutex> lock(m_fileMutex);
@@ -1976,7 +1644,7 @@ public:
 
         // Header
         outFile << "# Time-sliced neural activity data\n";
-        outFile << "# Format:device_id,channel_id,slice0_activity,slice1_activity,slice2_activity,slice3_activity,slice4_activity,slice0_phase,slice1_phase,slice2_phase,slice3_phase,slice4_phase\n";
+        outFile << "# Format:device_id,channel_id,slice0_activity,slice1_activity,slice2_activity,slice3_activity,slice4_activity\n";
 
         for (int deviceIndex = 0; deviceIndex < m_deviceStates.size(); deviceIndex++)
         {
@@ -1994,13 +1662,6 @@ public:
                 for (size_t i = 0; i < chData.sliceActivityLevels.size(); i++)
                 {
                     outFile << "," << std::fixed << std::setprecision(1) << chData.sliceActivityLevels[i];
-                }
-
-                // Phase values
-                for (size_t i = 0; i < chData.slicePhases.size(); i++)
-                {
-                    outFile << "," << std::fixed << std::setprecision(2)
-                            << chData.slicePhases[i];
                 }
                 outFile << "\n";
             }
@@ -2026,40 +1687,8 @@ public:
         // Create a combined output for neural visualization
         exportNeuralMonitorData();
         exportTimeSlicedData();
-        exportPhaseData();
+        
     }
-    void exportPhaseData()
-    {
-        std::lock_guard<std::mutex> lock(m_fileMutex);
-        std::string path = OUTPUT_DIRECTORY + "\\phase_data.txt";
-        std::ofstream outFile(path);
-
-        if (!outFile.is_open())
-        {
-            std::cerr << "Failed to open phase data file: " << path << std::endl;
-            return;
-        }
-
-        // Header
-        outFile << "# Device Phase Relationships\n";
-        outFile << "# Format: device_id,channel0_phase,channel1_phase,...,channel11_phase\n";
-
-        for (int dev = 0; dev < m_numDevices; dev++)
-        {
-            if (!m_deviceStates[dev].connected)
-                continue;
-
-            outFile << dev;
-            for (int ch = 0; ch < 12; ch++)
-            {
-                outFile << "," << std::fixed << std::setprecision(2)
-                        << m_deviceStates[dev].channelData[ch].phaseOffset;
-            }
-            outFile << "\n";
-        }
-        outFile.close();
-    }
-
     // Export consolidated neural monitor data for all devices
     void exportNeuralMonitorData()
     {
