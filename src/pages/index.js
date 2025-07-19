@@ -3,7 +3,7 @@ import React, { useState, useCallback, createContext, useMemo } from 'react';
 import Head from 'next/head';
 import { ThemeProvider, CssBaseline } from '@mui/material';
 import { darkTheme } from '../styles/styledComponents';
-import MultiBrainDashboard from '../components/MultiBrainDashboard';
+import MultiBrainDashboard from '../components/dashboard/MultiBrainDashboard';
 import SettingsDialog from '../components/SettingsDialog';
 import { useRouter } from 'next/navigation';
 

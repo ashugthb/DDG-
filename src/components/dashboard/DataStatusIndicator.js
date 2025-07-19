@@ -4,7 +4,7 @@ import { Box, Typography, CircularProgress, Tooltip, Button } from '@mui/materia
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
 import RefreshIcon from '@mui/icons-material/Refresh';
-import { ActivityIndicator } from '../styles/styledComponents';
+import { ActivityIndicator } from '../../styles/styledComponents';
 
 const DataStatusIndicator = ({ status, lastUpdated, onRefresh }) => {
   const renderContent = () => {
