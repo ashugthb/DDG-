@@ -3,14 +3,14 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Box, Typography } from '@mui/material';
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
-import { StatsOverlay, InactiveBrainOverlay } from '../styles/styledComponents';
+import { StatsOverlay, InactiveBrainOverlay } from '../../styles/styledComponents';
 import {
   createBrainColors,
   getActivityColorAndSize,
   ELECTRODE_POSITIONS,
   drawAdvancedContourMap,
   templateToScreen,
-} from '../utils/brainUtils';
+} from '../../utils/brainUtils';
 
 // Add maximum canvas dimensions to prevent memory issues
 const MAX_CANVAS_WIDTH = 300;

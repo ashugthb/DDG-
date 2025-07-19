@@ -34,3 +34,18 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+## Deploy to GitHub Pages
+
+This project can also be exported as a static site and hosted via GitHub Pages.
+Set the `NEXT_PUBLIC_BASE_PATH` environment variable to match the repository
+name before building:
+
+```bash
+export NEXT_PUBLIC_BASE_PATH=/brain-viz   # replace with your repo name
+npm run build
+npx next export
+```
+
+The static site will be generated in the `out` directory. Commit those files to
+the `gh-pages` branch or configure GitHub Pages to use the `out` folder.

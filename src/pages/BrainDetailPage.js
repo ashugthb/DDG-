@@ -26,9 +26,9 @@ import CloseIcon from '@mui/icons-material/Close';
 import TimerIcon from '@mui/icons-material/Timer';
 
 // Import subcomponents
-import TimeSlicedBrainView from '../components/TimeSlicedBrainView';
-import BrainDiagnosticsPanel from '../components/BrainDiagnosticsPanel';
-import FrequencyAnalysisGraph from '../components/FrequencyAnalysisGraph';
+import TimeSlicedBrainView from '../components/brain/TimeSlicedBrainView';
+import BrainDiagnosticsPanel from '../components/brain/BrainDiagnosticsPanel';
+import FrequencyAnalysisGraph from '../components/brain/FrequencyAnalysisGraph';
 
 // Default settings if not available from context
 const defaultSettings = {

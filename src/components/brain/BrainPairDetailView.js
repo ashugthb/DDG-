@@ -14,7 +14,7 @@ import SpeedIcon from '@mui/icons-material/Speed';
 import TimeSlicedBrainView from './TimeSlicedBrainView';
 import BrainDiagnosticsPanel from './BrainDiagnosticsPanel';
 import FrequencyAnalysisGraph from './FrequencyAnalysisGraph';
-import { getBrainData } from "../utils/brainUtils";
+import { getBrainData } from "../../utils/brainUtils";
 
 // Strongly downscale & randomize brain (for very large values)
 function downscaleAndRandomizeBrain(brain, scale = 0.000001) {
