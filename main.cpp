@@ -24,6 +24,9 @@
 #include <direct.h> // For _mkdir on Windows
 #include <corecrt_math_defines.h>
 #include <complex>
+// Removed fftw3.h
+#include <functional>
+#include <future>
 
 // Forward declarations
 class HantekDevice;
@@ -125,6 +128,7 @@ public:
     }
 };
 
+// --- Signal analysis structures ---
 // Enhanced channel data structure
 struct ChannelData
 {
@@ -136,6 +140,8 @@ struct ChannelData
     std::chrono::system_clock::time_point lastChangeTime;
     std::vector<int> sliceTransitions;       // Transitions per time slice
     std::vector<double> sliceActivityLevels; // Activity level per slice (0-100)
+    double meanPhase = 0.0;        // Mean phase for quick display
+    double phaseVariance = 0.0;    // Phase stability metric
 
     ChannelData() : changed(false), currentState(0), transitions(0), totalTransitions(0)
     {
@@ -739,6 +745,58 @@ private:
     SetPreTriFunc m_SetPreTri = nullptr;
 };
 
+class ThreadPool {
+public:
+    ThreadPool(size_t threads) : stop(false) {
+        for(size_t i = 0; i < threads; ++i)
+            workers.emplace_back([this] {
+                for(;;) {
+                    std::function<void()> task;
+                    {
+                        std::unique_lock<std::mutex> lock(this->queue_mutex);
+                        this->condition.wait(lock, [this]{ 
+                            return this->stop || !this->tasks.empty(); 
+                        });
+                        if(this->stop && this->tasks.empty()) return;
+                        task = std::move(this->tasks.front());
+                        this->tasks.pop();
+                    }
+                    task();
+                }
+            });
+    }
+    template<class F, class... Args>
+    auto enqueue(F&& f, Args&&... args) -> std::future<decltype(f(args...))> {
+        using return_type = decltype(f(args...));
+        auto task = std::make_shared<std::packaged_task<return_type()>>(
+            std::bind(std::forward<F>(f), std::forward<Args>(args)...)
+        );
+        std::future<return_type> res = task->get_future();
+        {
+            std::unique_lock<std::mutex> lock(queue_mutex);
+            if(stop) throw std::runtime_error("enqueue on stopped ThreadPool");
+            tasks.emplace([task](){ (*task)(); });
+        }
+        condition.notify_one();
+        return res;
+    }
+    ~ThreadPool() {
+        {
+            std::unique_lock<std::mutex> lock(queue_mutex);
+            stop = true;
+        }
+        condition.notify_all();
+        for(std::thread &worker: workers)
+            worker.join();
+    }
+private:
+    std::vector<std::thread> workers;
+    std::queue<std::function<void()>> tasks;
+    std::mutex queue_mutex;
+    std::condition_variable condition;
+    bool stop;
+};
+
 // Multi-Device Logic Analyzer class
 class MultiLogicAnalyzer
 {
@@ -775,7 +833,7 @@ private:
     std::vector<int> m_timeSliceCounts;                      // Number of slices per device
     std::vector<double> m_timeWindows;                       // Time window (seconds) per device
     std::vector<std::pair<double, double>> m_frequencyBands; // Frequency bands (min, max) per device
-    const std::vector<std::pair<double, double>> FREQUENCY_BANDS = {
+    std::vector<std::pair<double, double>> FREQUENCY_BANDS = {
         {0, 100},                // Band 0: 0-100 Hz
         {500, 600},              // Band 1: 500-600 Hz
         {2000, 6000},            // Band 2: 2-6 kHz
@@ -789,6 +847,126 @@ private:
         {800000000, 1200000000}, // Band 10: 0.8-1.2 GHz
         {1940000000, 5310000000} // Band 11: 1.94-5.31 GHz
     };
+    std::unique_ptr<ThreadPool> m_threadPool;
+    void initializeFrequencyConfigs() {
+        const std::vector<std::pair<double, double>> FREQUENCY_BANDS = {
+            {0, 100}, {500, 600}, {2000, 6000}, 
+            {10000, 50000}, {100000, 200000}, {500000, 600000},
+            {800000, 1200000}, {10000000, 50000000},
+            {100000000, 200000000}, {500000000, 600000000},
+            {800000000, 1200000000}, {1940000000, 5310000000}
+        };
+        for (int i = 0; i < m_numDevices && i < FREQUENCY_BANDS.size(); i++) {
+            DeviceFrequencyConfig config;
+            config.bandwidth = FREQUENCY_BANDS[i].second - FREQUENCY_BANDS[i].first;
+            config.centerFreq = (FREQUENCY_BANDS[i].first + FREQUENCY_BANDS[i].second) / 2.0;
+            config.samplingRate = getOptimalSamplingRate(config.centerFreq);
+            config.fftSize = getOptimalFFTSize(config.samplingRate);
+            m_deviceFreqConfigs.push_back(config);
+        }
+    }
+    double getOptimalSamplingRate(double centerFreq) {
+        return 2.5 * centerFreq;
+    }
+    int getOptimalFFTSize(double samplingRate) {
+        return (int)pow(2, static_cast<int>(log2(samplingRate / 1000)));
+    }
+    void computeInstantaneousPhase(int deviceIndex, int channel, const std::vector<uint32_t>& samples) {
+    ChannelData& chData = m_deviceStates[deviceIndex].channelData[channel];
+    const int windowSize = 2048;  // Increased window size
+    int N = static_cast<int>(samples.size());
+    
+    if (N < windowSize) {
+        // Fallback: use duty cycle with enhanced calculation
+        int highCount = 0;
+        for (int i = 0; i < N; ++i) {
+            if (((samples[i] >> channel) & 1) != 0) highCount++;
+        }
+        double frac = N > 0 ? static_cast<double>(highCount) / N : 0.0;
+        chData.meanPhase = frac * 2 * M_PI;
+        chData.phaseVariance = frac * (1.0 - frac);
+        return;
+    }
+
+    // Extract last windowSize samples
+    std::vector<double> x(windowSize);
+    for (int i = 0; i < windowSize; ++i) {
+        x[i] = ((samples[N - windowSize + i] >> channel) & 1) ? 1.0 : -1.0;
+    }
+
+    // Apply Hamming window
+    for (int i = 0; i < windowSize; ++i) {
+        double w = 0.54 - 0.46 * std::cos(2 * M_PI * i / (windowSize - 1));
+        x[i] *= w;
+    }
+
+    // Compute DFT
+    std::vector<std::complex<double>> dft(windowSize);
+    for (int k = 0; k < windowSize; ++k) {
+        std::complex<double> sum(0.0, 0.0);
+        for (int n = 0; n < windowSize; ++n) {
+            double angle = -2 * M_PI * k * n / windowSize;
+            sum += x[n] * std::complex<double>(std::cos(angle), std::sin(angle));
+        }
+        dft[k] = sum;
+    }
+
+    // Create analytic signal (Hilbert transform)
+    // Zero negative frequencies, double positive frequencies
+    int nyquist = windowSize / 2;
+    for (int k = 1; k < nyquist; ++k) {
+        dft[k] *= 2.0;
+    }
+    for (int k = nyquist + 1; k < windowSize; ++k) {
+        dft[k] = 0.0;
+    }
+
+    // Inverse DFT to get analytic signal
+    std::vector<std::complex<double>> analytic(windowSize);
+    for (int n = 0; n < windowSize; ++n) {
+        std::complex<double> sum(0.0, 0.0);
+        for (int k = 0; k < windowSize; ++k) {
+            double angle = 2 * M_PI * k * n / windowSize;
+            sum += dft[k] * std::complex<double>(std::cos(angle), std::sin(angle));
+        }
+        analytic[n] = sum / static_cast<double>(windowSize);
+    }
+
+    // Compute instantaneous phase and statistics
+    double sumSin = 0.0, sumCos = 0.0;
+    double sumPhase = 0.0, sumSqPhase = 0.0;
+    std::vector<double> phases(windowSize);
+    
+    for (int i = 0; i < windowSize; ++i) {
+        double phase = std::arg(analytic[i]);
+        phases[i] = phase;
+        
+        // Handle phase wrapping
+        if (i > 0) {
+            double diff = phases[i] - phases[i-1];
+            if (diff > M_PI) phases[i] -= 2 * M_PI;
+            else if (diff < -M_PI) phases[i] += 2 * M_PI;
+        }
+        
+        sumSin += std::sin(phase);
+        sumCos += std::cos(phase);
+        sumPhase += phases[i];
+    }
+
+    // Compute mean and variance
+    double meanPhase = std::atan2(sumSin, sumCos);
+    double mean = sumPhase / windowSize;
+    double variance = 0.0;
+    for (int i = 0; i < windowSize; ++i) {
+        double diff = phases[i] - mean;
+        variance += diff * diff;
+    }
+    variance /= windowSize;
+
+    // Normalize variance to 0-1 range
+    chData.meanPhase = meanPhase;
+    chData.phaseVariance = std::min(1.0, std::max(0.0, variance / (M_PI * M_PI)));
+}
     void configureDeviceGroups()
     {
         // First group: devices 0-9 using primary DLL
@@ -797,6 +975,14 @@ private:
         // Second group: devices 10-11 using secondary DLL
         m_deviceGroups.push_back({"C:\\Program Files (x86)\\Hantek4032L\\HTLAHard.dll", 10, 2});
     }
+
+    struct DeviceFrequencyConfig {
+        double centerFreq;
+        double bandwidth;
+        int fftSize;
+        double samplingRate;
+    };
+    std::vector<DeviceFrequencyConfig> m_deviceFreqConfigs;
 
 public:
     MultiLogicAnalyzer(int numDevices = MAX_DEVICES)
@@ -837,6 +1023,7 @@ public:
             std::string configFile = "logic_config_" + std::to_string(i) + ".txt";
             m_configs.push_back(AnalyzerConfig());
             m_configs[i].configFilePath = configFile;
+            m_configs[i].voltageThreshold = 1.7; // Set threshold to 1.7 for all devices
         }
 
         // Create output directories
@@ -849,6 +1036,8 @@ public:
         m_lastConfigModified.resize(numDevices, 0);
         // Setup default device groups (0-9 and 10-11)
         configureDeviceGroups();
+        m_threadPool = std::make_unique<ThreadPool>(std::thread::hardware_concurrency());
+        initializeFrequencyConfigs();
     }
 
     ~MultiLogicAnalyzer()
@@ -940,14 +1129,14 @@ public:
                 std::cout << "\n--- Device " << deviceIndex << " Connection Attempt ---\n";
                 HantekDevice& device = m_devices[deviceIndex];
 
-                // Load DLL for this group
+                // Load DLL for this device (each device gets its own instance)
                 if (!device.loadDLL(group.dllPath)) {
                     std::cout << "  DLL load FAILED: " << device.getLastError() << "\n";
                     continue;
                 }
 
-                // Connect using relative index within group
-                if (!device.connect(i)) {
+                // Connect using deviceIndex
+                if (!device.connect(deviceIndex)) {
                     std::cout << "  Connection FAILED: " << device.getLastError() << "\n";
                     continue;
                 }
@@ -971,11 +1160,11 @@ public:
                 m_deviceStates[deviceIndex].model = device.getModel();
                 m_deviceStates[deviceIndex].firmwareVersion = device.getFirmwareVersion();
                 m_activeDevices++;
-                
+
                 // Store device info
                 m_configs[deviceIndex].serialNumber = device.getSerialNumber();
                 m_configs[deviceIndex].model = device.getModel();
-                
+
                 std::cout << "  Connection SUCCESS\n";
             }
         }
@@ -1080,69 +1269,53 @@ public:
     {
         DeviceState &state = m_deviceStates[deviceIndex];
         HantekDevice &device = m_devices[deviceIndex];
-
-        // Skip if not connected
-        if (!state.connected || !state.active)
-        {
-            return;
-        }
-
-        // Clear changed channels history after timeout
-        const int CHANGE_HIGHLIGHT_MS = 3000; // How long to highlight changes
-
+       
+        const int CHANGE_HIGHLIGHT_MS = 3000;
         while (m_running && state.active)
         {
-            // Check for configuration changes
             bool configChanged = checkConfigurationChanges(deviceIndex);
-
-            // If config changed, skip this capture cycle to let device settle
             if (configChanged)
             {
                 std::this_thread::sleep_for(std::chrono::milliseconds(500));
                 continue;
             }
-
             bool captureSuccess = false;
-
             try
             {
-                // Start capture with timeout protection
                 auto captureStartTime = std::chrono::steady_clock::now();
                 const auto captureTimeout = std::chrono::seconds(3);
-
                 if (!device.startCapture())
                 {
                     handleDeviceError(deviceIndex, "Failed to start capture: " + device.getLastError());
+                    
                 }
                 else
                 {
-                    // Wait for capture to complete
                     if (!device.waitForCaptureComplete(2000))
                     {
-                        // Timeout is a warning, not necessarily an error
                         state.consecutiveErrors++;
                         handleDeviceError(deviceIndex, "Capture timeout");
+                        
                     }
                     else
                     {
-                        // Check if we've exceeded the overall capture timeout
                         auto elapsedTime = std::chrono::steady_clock::now() - captureStartTime;
                         if (elapsedTime > captureTimeout)
                         {
                             handleDeviceError(deviceIndex, "Total capture operation timed out");
                             state.consecutiveErrors++;
+                            
                         }
                         else
                         {
-                            // Read data
                             std::vector<uint32_t> capturedData;
                             if (!device.readData(capturedData))
                             {
                                 handleDeviceError(deviceIndex, "Failed to read data: " + device.getLastError());
+                               
                             }
                             else
                             {
-                                // Process data
                                 processData(deviceIndex, capturedData);
                                 captureSuccess = true;
                                 state.consecutiveErrors = 0;
@@ -1156,24 +1329,21 @@ public:
             catch (const std::exception &e)
             {
                 handleDeviceError(deviceIndex, std::string("Exception: ") + e.what());
+                
             }
             catch (...)
             {
                 handleDeviceError(deviceIndex, "Unknown exception in device worker");
+                
             }
-
-            // Handle errors
             if (!captureSuccess)
             {
                 state.consecutiveErrors++;
                 state.errorsCount++;
-
-                // After too many consecutive errors, try to reset the device
                 if (state.consecutiveErrors >= 5)
                 {
                     if (device.resetAndReconnect())
                     {
-                        // Reapply current configuration after reset
                         if (applyConfiguration(deviceIndex))
                         {
                             state.consecutiveErrors = 0;
@@ -1181,7 +1351,6 @@ public:
                     }
                     else
                     {
-                        // Mark device as inactive if reset fails
                         if (state.consecutiveErrors >= 10)
                         {
                             state.active = false;
@@ -1190,35 +1359,25 @@ public:
                         }
                     }
                 }
-
-                // Small delay before retry
                 std::this_thread::sleep_for(std::chrono::milliseconds(200));
             }
-
-            // Clear changed status after timeout
             auto now = std::chrono::system_clock::now();
             std::vector<int> channelsToRemove;
-
             for (const auto &entry : state.changedChannels)
             {
                 int ch = entry.first;
                 auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
                                    now - state.channelData[ch].lastChangeTime)
                                    .count();
-
                 if (elapsed > CHANGE_HIGHLIGHT_MS)
                 {
                     channelsToRemove.push_back(ch);
                 }
             }
-
-            // Remove expired changed channels
             for (int ch : channelsToRemove)
             {
                 state.changedChannels.erase(ch);
             }
-
-            // Use configurable scan interval
             std::this_thread::sleep_for(std::chrono::milliseconds(m_configs[deviceIndex].scanIntervalMs));
         }
     }
@@ -1420,8 +1579,8 @@ public:
             return false;
         }
 
-        // Set voltage threshold (optional)
-        device.setVoltageThreshold(config.voltageThreshold);
+        // Set voltage threshold (always use 1.7)
+        device.setVoltageThreshold(1.7);
 
         // Configure trigger
         if (!device.configureTrigger(config.enableTrigger, config.triggerChannel, config.triggerRisingEdge))
@@ -1518,11 +1677,7 @@ public:
 
     void processData(int deviceIndex, const std::vector<uint32_t> &capturedData)
     {
-        if (deviceIndex >= m_deviceStates.size())
-        {
-            return;
-        }
-
+      
         DeviceState &state = m_deviceStates[deviceIndex];
         const unsigned long samplingRate = m_deviceSamplingRates[deviceIndex];
         const int numSlices = m_timeSliceCounts[deviceIndex];
@@ -1622,6 +1777,20 @@ public:
             state.channelData[ch].samples = capturedData;
         }
         
+        // Phase analysis for first 12 channels
+        std::vector<std::future<void>> futures;
+        for (int ch = 0; ch < 12; ch++) {
+            futures.emplace_back(
+                m_threadPool->enqueue([this, deviceIndex, ch, &capturedData]{
+                    computeInstantaneousPhase(deviceIndex, ch, capturedData);
+                })
+            );
+        }
+        for(auto &future : futures) {
+            future.wait();
+        }
+        // Export phase data to TXT for Next.js and processing
+        exportPhaseDataTXT();
         // Export data to file for this device
         exportDeviceData(deviceIndex);
     }
@@ -1772,6 +1941,12 @@ public:
                 }
             }
 
+            // --- Export phase data for first 12 channels ---
+            for (int ch = 0; ch < 12; ch++) {
+                const ChannelData& chData = state.channelData[ch];
+                outputFile << "PHASE_DATA," << deviceIndex << "," << ch << ","
+                           << chData.meanPhase << "," << chData.phaseVariance << "\n";
+            }
             // Add a blank line between devices
             outputFile << "\n";
         }
@@ -1849,13 +2024,11 @@ public:
     void displaySummaryView()
     {
         // Show summary of all devices
-        std::cout << "Device | Status   | Serial   | Model    | Captures | Errors | Active Channels\n";
-        std::cout << "-------+----------+----------+----------+----------+--------+----------------\n";
-
+        std::cout << "Device | Status   | Serial   | Model    | Active Channels\n";
+        std::cout << "-------+----------+----------+----------+----------------\n";
         for (int i = 0; i < m_numDevices; i++)
         {
             const DeviceState &state = m_deviceStates[i];
-
             if (!state.connected)
             {
                 ConsoleColors::setColor(ConsoleColors::DARKGRAY);
@@ -1863,31 +2036,23 @@ public:
                 std::cout << "NOT FOUND | ";
                 std::cout << std::setw(8) << "-" << " | ";
                 std::cout << std::setw(8) << "-" << " | ";
-                std::cout << std::setw(8) << "-" << " | ";
-                std::cout << std::setw(6) << "-" << " | ";
                 std::cout << "-" << std::endl;
                 ConsoleColors::resetColor();
                 continue;
             }
-
-            // Count active channels and changes
             int activeChannels = 0;
             int changingChannels = 0;
-
             for (int ch = 0; ch < 32; ch++)
             {
                 if (state.channelData[ch].totalTransitions > 0)
                 {
                     activeChannels++;
-
                     if (state.changedChannels.find(ch) != state.changedChannels.end())
                     {
                         changingChannels++;
                     }
                 }
             }
-
-            // Device status color
             if (!state.active)
             {
                 ConsoleColors::setColor(ConsoleColors::RED);
@@ -1904,9 +2069,7 @@ public:
             {
                 ConsoleColors::setColor(ConsoleColors::LIGHTGRAY);
             }
-
             std::cout << std::setw(6) << i << " | ";
-
             if (!state.active)
             {
                 std::cout << "ERROR     | ";
@@ -1919,12 +2082,8 @@ public:
             {
                 std::cout << "OK        | ";
             }
-
             std::cout << std::setw(8) << state.serialNumber.substr(0, 8) << " | ";
             std::cout << std::setw(8) << state.model.substr(0, 8) << " | ";
-            std::cout << std::setw(8) << state.capturesCount << " | ";
-            std::cout << std::setw(6) << state.errorsCount << " | ";
-
             if (activeChannels > 0)
             {
                 std::cout << activeChannels << " (" << changingChannels << " changing)";
@@ -1933,7 +2092,6 @@ public:
             {
                 std::cout << "None";
             }
-
             std::cout << std::endl;
             ConsoleColors::resetColor();
         }
@@ -2031,6 +2189,14 @@ public:
                 std::cout << std::setw(9) << state.channelData[ch].totalTransitions << " | ";
                 std::cout << std::setw(8) << elapsed << " ms *\n";
 
+
+                // --- Display phase info for first 12 channels ---
+                if (ch < 12) {
+                    const ChannelData& chData = state.channelData[ch];
+                    std::cout << "    Phase: " << std::fixed << std::setprecision(2)
+                              << chData.meanPhase << " rad ("
+                              << chData.phaseVariance * 100 << "% var)\n";
+                }
                 ConsoleColors::resetColor();
             }
         }
@@ -2056,15 +2222,20 @@ public:
             std::cout << std::right << std::setw(7) << state.channelData[ch].transitions << " | ";
             std::cout << std::setw(9) << state.channelData[ch].totalTransitions << " | ";
             std::cout << std::setw(8) << "-" << std::endl;
+            // --- Display phase info for first 12 channels ---
+            if (ch < 12) {
+                const ChannelData& chData = state.channelData[ch];
+                std::cout << "    Phase: " << std::fixed << std::setprecision(2)
+                          << chData.meanPhase << " rad ("
+                          << chData.phaseVariance * 100 << "% var)\n";
+            }
         }
-
         if (!anyActive)
         {
             std::cout << "No channel activity detected on device " << m_detailViewDevice << ".\n";
         }
         else
         {
-            // Show legend
             std::cout << "\n* Channels marked with an asterisk have changed recently\n";
             std::cout << "  " << state.changedChannels.size() << " channel(s) changing now\n";
         }
@@ -2128,10 +2299,55 @@ public:
             std::cout << "No channel activity detected on any device.\n";
         }
     }
+
+    // Add a function to export phase data to TXT in logic_data.txt style
+    void exportPhaseDataTXT() {
+        std::string outputPath = OUTPUT_DIRECTORY + "\\phase_data.txt";
+        std::ofstream outputFile(outputPath);
+        if (!outputFile.is_open()) {
+            std::cerr << "Failed to open phase data TXT: " << outputPath << std::endl;
+            return;
+        }
+
+        // Get current timestamp
+        auto now = std::chrono::system_clock::now();
+        std::time_t now_c = std::chrono::system_clock::to_time_t(now);
+        struct tm *timeinfo = std::localtime(&now_c);
+        char timestamp[100];
+        std::strftime(timestamp, sizeof(timestamp), "%Y-%m-%d %H:%M:%S", timeinfo);
+
+        // Write header
+        outputFile << "# Phase Data - Updated: " << timestamp << "\n";
+        outputFile << "# Format: [device_id],[serial],[model],[channel_id],[meanPhase],[phaseVariance]\n\n";
+
+        // Write data for all devices
+        for (int deviceIndex = 0; deviceIndex < m_deviceStates.size(); deviceIndex++) {
+            const DeviceState &state = m_deviceStates[deviceIndex];
+            if (!state.connected) {
+                continue;
+            }
+
+            // Write device header
+            outputFile << "DEVICE," << deviceIndex << "," << state.serialNumber << ", "
+                       << state.model << "," << state.capturesCount << "\n";
+
+            // Write phase data for first 12 channels
+            for (int ch = 0; ch < 12; ch++) {
+                const ChannelData& chData = state.channelData[ch];
+                outputFile << "PHASE," << ch << "," << m_channelNames[ch] << ", "
+                           << chData.meanPhase << "," << chData.phaseVariance << "\n";
+            }
+            // Add a blank line between devices
+            outputFile << "\n";
+        }
+
+        outputFile.close();
+    }
 };
 // Main function
 int main(int argc, char *argv[])
 {
+    int exitCode = 0;
     try
     {
         // Default number of devices to scan (can be overridden by command line)
@@ -2179,7 +2395,7 @@ int main(int argc, char *argv[])
             std::cerr << "Failed to initialize MultiLogicAnalyzer. Exiting.\n";
             std::cout << "Press any key to exit..." << std::endl;
             _getch();
-            return 1;
+            exitCode = 1;
         }
     }
     catch (const std::exception &e)
@@ -2187,18 +2403,25 @@ int main(int argc, char *argv[])
         std::cerr << "Exception in main: " << e.what() << std::endl;
         std::cout << "Press any key to exit..." << std::endl;
         _getch();
-        return 1;
+        exitCode = 1;
     }
     catch (...)
     {
         std::cerr << "Unknown exception in main" << std::endl;
         std::cout << "Press any key to exit..." << std::endl;
         _getch();
-        return 1;
+        exitCode = 1;
     }
 
-    // Added to keep console window open until user presses a key
+    // Ensure all resources are released before exiting
+    // Flush all file streams (if any global ones exist)
+    std::cout << "Cleaning up resources..." << std::endl;
+    // No global file streams, but if you add any, flush and close here
+
+    // Wait for a moment to ensure OS releases file handles
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
     std::cout << "Program finished. Press any key to exit..." << std::endl;
     _getch();
-    return 0;
+    return exitCode;
 }
