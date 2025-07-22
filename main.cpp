@@ -911,6 +911,8 @@ void MultiLogicAnalyzer::computeInstantaneousPhase(int deviceIndex, int channel,
     }
 
     // Apply Hamming window to reduce spectral leakage
+    const double a0 = 0.54; // Hamming window coefficient
+    const double a1 = 0.46; // Hamming window coefficient
     for (int i = 0; i < windowSize; ++i) {
         double w = a0 - a1 * cos(2 * M_PI * i / (windowSize - 1));
         x[i] *= w;

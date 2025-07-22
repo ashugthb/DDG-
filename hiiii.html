@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Neural Phase Analysis Demo</title>
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 20px;
+    }
+    h1 {
+      text-align: center;
+    }
+    #phase-viz-container {
+      width: 100%;
+      height: 600px;
+      position: relative;
+    }
+    .phase-tooltip {
+      position: absolute;
+      pointer-events: none;
+      background: rgba(255,255,255,0.9);
+      border: 1px solid #ccc;
+      padding: 6px;
+      border-radius: 4px;
+      font-size: 13px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+      opacity: 0;
+      transition: opacity 0.2s ease;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Neural Phase Analysis Demo</h1>
+  <div id="phase-viz-container"></div>
+  <div id="tooltip" class="phase-tooltip"></div>
+
+  <script>
+    // ----- Sample data -----
+    // Two devices, each with two channels
+    const phaseData = {
+      "0": {
+        serial: "HT1234",
+        model: "DSO2090",
+        channels: {
+          "0": { name: "CH0", meanPhase: 1.0, variance: 0.10 },
+          "1": { name: "CH1", meanPhase: 2.3, variance: 0.20 }
+        }
+      },
+      "1": {
+        serial: "HT5678",
+        model: "DSO2100",
+        channels: {
+          "0": { name: "CH0", meanPhase: 4.5, variance: 0.05 },
+          "1": { name: "CH1", meanPhase: 5.8, variance: 0.15 }
+        }
+      }
+    };
+
+    // ----- Setup SVG -----
+    const container = d3.select('#phase-viz-container');
+    const width  = container.node().clientWidth;
+    const height = container.node().clientHeight;
+    const margin = { top: 20, right: 20, bottom: 20, left: 20 };
+    const R = Math.min(width, height) / 2 - Math.max(margin.left, margin.top);
+
+    const svg = container
+      .append('svg')
+      .attr('width', width)
+      .attr('height', height);
+
+    const g = svg.append('g')
+      .attr('transform', `translate(${width/2},${height/2})`);
+
+    // ----- Scales -----
+    const rScale = d3.scaleLinear()
+      .domain([0,1])
+      .range([0, R]);
+
+    // ----- Draw concentric circles -----
+    [0.25, 0.5, 0.75, 1].forEach(t => {
+      g.append('circle')
+        .attr('r', rScale(t))
+        .attr('fill', 'none')
+        .attr('stroke', '#ddd');
+      g.append('text')
+        .attr('x', 0)
+        .attr('y', -rScale(t) - 5)
+        .attr('text-anchor', 'middle')
+        .attr('font-size', '10px')
+        .text(t);
+    });
+
+    // ----- Angle labels -----
+    const angles = [0, Math.PI/2, Math.PI, 3*Math.PI/2];
+    const labels = ['0', 'π/2', 'π', '3π/2'];
+    angles.forEach((a,i) => {
+      const [x,y] = [Math.cos(a)* (R+15), Math.sin(a)*(R+15)];
+      g.append('text')
+        .attr('x', x)
+        .attr('y', y)
+        .attr('text-anchor', 'middle')
+        .attr('font-size', '10px')
+        .text(labels[i]);
+    });
+
+    // ----- Tooltip -----
+    const tooltip = d3.select('#tooltip');
+
+    // ----- Plot points -----
+    let colorIndex = 0;
+    Object.entries(phaseData).forEach(([devId, dev]) => {
+      Object.entries(dev.channels).forEach(([chId, ch]) => {
+        const angle  = ch.meanPhase;
+        const radius = rScale(1 - ch.variance);  // stability = 1-variance
+        const x = Math.cos(angle) * radius;
+        const y = Math.sin(angle) * radius;
+
+        const color = d3.interpolateRainbow(colorIndex / 6);
+        colorIndex++;
+
+        g.append('circle')
+          .attr('cx', x)
+          .attr('cy', y)
+          .attr('r', 6)
+          .attr('fill', color)
+          .attr('stroke', '#333')
+          .attr('data-dev', devId)
+          .attr('data-ch', chId)
+          .on('mouseover', (event) => {
+            tooltip
+              .style('left', (event.pageX + 10) + 'px')
+              .style('top',  (event.pageY - 25) + 'px')
+              .html(`
+                <strong>Device ${devId} (${dev.model})</strong><br/>
+                Channel ${chId} (${ch.name})<br/>
+                Mean Phase: ${ch.meanPhase.toFixed(2)} rad<br/>
+                Variance:   ${ch.variance.toFixed(3)}<br/>
+                Stability:  ${(1-ch.variance).toFixed(2)}
+              `)
+              .style('opacity', 1);
+          })
+          .on('mouseout', () => {
+            tooltip.style('opacity', 0);
+          });
+      });
+    });
+  </script>
+</body>
+</html>
