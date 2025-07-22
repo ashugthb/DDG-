@@ -48,7 +48,7 @@ const BrainPairDetailView = ({
   // Always make two brains from only brainPair[0]
   const preparedPair = useMemo(() => {
     const brain1 = brainPair && brainPair[0] ? brainPair[0] : null;
-    const brain2 = brain1 ? downscaleAndRandomizeBrain(brain1, phaseScale) : null;
+    const brain2 = allBrainData[0] || null;
     return [brain1, brain2];
   }, [brainPair, phaseScale]);
 

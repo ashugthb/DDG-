@@ -871,101 +871,137 @@ private:
     int getOptimalFFTSize(double samplingRate) {
         return (int)pow(2, static_cast<int>(log2(samplingRate / 1000)));
     }
-    void computeInstantaneousPhase(int deviceIndex, int channel, const std::vector<uint32_t>& samples) {
+void MultiLogicAnalyzer::computeInstantaneousPhase(int deviceIndex, int channel, const std::vector<uint32_t>& samples) {
     ChannelData& chData = m_deviceStates[deviceIndex].channelData[channel];
-    const int windowSize = 2048;  // Increased window size
+    const int windowSize = 2048;
     int N = static_cast<int>(samples.size());
     
     if (N < windowSize) {
-        // Fallback: use duty cycle with enhanced calculation
+        // Fallback to duty cycle based calculation
         int highCount = 0;
         for (int i = 0; i < N; ++i) {
             if (((samples[i] >> channel) & 1) != 0) highCount++;
         }
         double frac = N > 0 ? static_cast<double>(highCount) / N : 0.0;
-        chData.meanPhase = frac * 2 * M_PI;
-        chData.phaseVariance = frac * (1.0 - frac);
+        
+        // Circular mean and variance calculation for binary signal
+        double sumSin = highCount * sin(M_PI) + (N - highCount) * sin(0);
+        double sumCos = highCount * cos(M_PI) + (N - highCount) * cos(0);
+        double R = sqrt(sumSin*sumSin + sumCos*sumCos) / N;
+        double circularVariance = 1.0 - R;
+        double meanPhase = atan2(sumSin, sumCos);
+        
+        chData.meanPhase = meanPhase;
+        chData.phaseVariance = circularVariance;
         return;
     }
 
     // Extract last windowSize samples
     std::vector<double> x(windowSize);
+    int startIdx = N - windowSize;
     for (int i = 0; i < windowSize; ++i) {
-        x[i] = ((samples[N - windowSize + i] >> channel) & 1) ? 1.0 : -1.0;
+        x[i] = ((samples[startIdx + i] >> channel) & 1) ? 1.0 : -1.0;
     }
 
     // Apply Hamming window
+    const double a0 = 25.0/46.0, a1 = 1 - a0;
     for (int i = 0; i < windowSize; ++i) {
-        double w = 0.54 - 0.46 * std::cos(2 * M_PI * i / (windowSize - 1));
+        double w = a0 - a1 * cos(2 * M_PI * i / (windowSize - 1));
         x[i] *= w;
     }
 
-    // Compute DFT
-    std::vector<std::complex<double>> dft(windowSize);
-    for (int k = 0; k < windowSize; ++k) {
-        std::complex<double> sum(0.0, 0.0);
-        for (int n = 0; n < windowSize; ++n) {
-            double angle = -2 * M_PI * k * n / windowSize;
-            sum += x[n] * std::complex<double>(std::cos(angle), std::sin(angle));
-        }
-        dft[k] = sum;
+    // Convert to complex
+    std::vector<std::complex<double>> signal(windowSize);
+    for (int i = 0; i < windowSize; ++i) {
+        signal[i] = std::complex<double>(x[i], 0.0);
     }
 
-    // Create analytic signal (Hilbert transform)
-    // Zero negative frequencies, double positive frequencies
-    int nyquist = windowSize / 2;
-    for (int k = 1; k < nyquist; ++k) {
-        dft[k] *= 2.0;
+    // Perform FFT
+    fft(signal, 1);
+
+    // Apply Hilbert transform in frequency domain
+    // Positive frequencies: double, negative frequencies: zero
+    int hw = windowSize/2;
+    for (int i = hw + 1; i < windowSize; ++i) {
+        signal[i] = 0;
     }
-    for (int k = nyquist + 1; k < windowSize; ++k) {
-        dft[k] = 0.0;
+    for (int i = 1; i < hw; ++i) {
+        signal[i] *= 2.0;
     }
 
-    // Inverse DFT to get analytic signal
-    std::vector<std::complex<double>> analytic(windowSize);
-    for (int n = 0; n < windowSize; ++n) {
-        std::complex<double> sum(0.0, 0.0);
-        for (int k = 0; k < windowSize; ++k) {
-            double angle = 2 * M_PI * k * n / windowSize;
-            sum += dft[k] * std::complex<double>(std::cos(angle), std::sin(angle));
-        }
-        analytic[n] = sum / static_cast<double>(windowSize);
-    }
+    // Perform IFFT
+    fft(signal, -1);
 
-    // Compute instantaneous phase and statistics
+    // Compute phase and circular statistics
     double sumSin = 0.0, sumCos = 0.0;
-    double sumPhase = 0.0, sumSqPhase = 0.0;
     std::vector<double> phases(windowSize);
+    double prevPhase = 0.0;
     
     for (int i = 0; i < windowSize; ++i) {
-        double phase = std::arg(analytic[i]);
+        double phase = std::arg(signal[i]);
+        
+        // Phase unwrapping
+        double diff = phase - prevPhase;
+        if (diff > M_PI) phase -= 2*M_PI;
+        else if (diff < -M_PI) phase += 2*M_PI;
+        
         phases[i] = phase;
+        prevPhase = phase;
         
-        // Handle phase wrapping
-        if (i > 0) {
-            double diff = phases[i] - phases[i-1];
-            if (diff > M_PI) phases[i] -= 2 * M_PI;
-            else if (diff < -M_PI) phases[i] += 2 * M_PI;
-        }
-        
-        sumSin += std::sin(phase);
-        sumCos += std::cos(phase);
-        sumPhase += phases[i];
+        sumSin += sin(phase);
+        sumCos += cos(phase);
     }
 
-    // Compute mean and variance
-    double meanPhase = std::atan2(sumSin, sumCos);
-    double mean = sumPhase / windowSize;
-    double variance = 0.0;
-    for (int i = 0; i < windowSize; ++i) {
-        double diff = phases[i] - mean;
-        variance += diff * diff;
-    }
-    variance /= windowSize;
+    // Compute circular mean and variance
+    double meanPhase = atan2(sumSin, sumCos);
+    double R = sqrt(sumSin*sumSin + sumCos*sumCos) / windowSize;
+    double circularVariance = 1.0 - R;
 
-    // Normalize variance to 0-1 range
+    // Store results
     chData.meanPhase = meanPhase;
-    chData.phaseVariance = std::min(1.0, std::max(0.0, variance / (M_PI * M_PI)));
+    chData.phaseVariance = circularVariance;
+}
+
+void MultiLogicAnalyzer::fft(std::vector<std::complex<double>>& x, int sign) {
+    const size_t N = x.size();
+    if (N <= 1) return;
+
+    // Bit-reversal permutation
+    size_t j = 0;
+    for (size_t i = 0; i < N - 1; ++i) {
+        if (i < j) std::swap(x[i], x[j]);
+        
+        size_t m = N >> 1;
+        while (m >= 1 && j >= m) {
+            j -= m;
+            m >>= 1;
+        }
+        j += m;
+    }
+
+    // Cooley-Tukey FFT
+    for (size_t s = 1; s < N; s <<= 1) {
+        size_t m = s << 1;
+        double theta = sign * M_PI / s;
+        std::complex<double> wm(cos(theta), sin(theta));
+        
+        for (size_t k = 0; k < N; k += m) {
+            std::complex<double> w(1);
+            for (size_t j = 0; j < s; ++j) {
+                std::complex<double> t = w * x[k + j + s];
+                x[k + j + s] = x[k + j] - t;
+                x[k + j] += t;
+                w *= wm;
+            }
+        }
+    }
+
+    // Scaling for inverse transform
+    if (sign == -1) {
+        for (size_t i = 0; i < N; ++i) {
+            x[i] /= N;
+        }
+    }
 }
     void configureDeviceGroups()
     {
@@ -1940,14 +1976,7 @@ public:
                                << activityLevel << "\n";
                 }
             }
-
-            // --- Export phase data for first 12 channels ---
-            for (int ch = 0; ch < 12; ch++) {
-                const ChannelData& chData = state.channelData[ch];
-                outputFile << "PHASE_DATA," << deviceIndex << "," << ch << ","
-                           << chData.meanPhase << "," << chData.phaseVariance << "\n";
-            }
-            // Add a blank line between devices
+           
             outputFile << "\n";
         }
 
