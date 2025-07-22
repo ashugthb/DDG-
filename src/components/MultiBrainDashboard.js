@@ -24,6 +24,7 @@ import SettingsIcon from "@mui/icons-material/Settings";
 import FullscreenIcon from "@mui/icons-material/Fullscreen";
 import FullscreenExitIcon from "@mui/icons-material/FullscreenExit";
 import RefreshIcon from "@mui/icons-material/Refresh";
+import ShowChartIcon from "@mui/icons-material/ShowChart";
 
 
 import BrainVisualization from "./BrainVisualization";
@@ -549,6 +550,17 @@ const MultiBrainDashboard = () => {
             onClick={openSettings} // Use context function
           >
             Settings
+          </HeaderButton>
+
+          <HeaderButton
+            component="a"
+            href="/phase-plot"
+            target="_blank"
+            startIcon={<ShowChartIcon />}
+            variant="outlined"
+            size="small"
+          >
+            Phase Chart
           </HeaderButton>
 
           <HeaderButton
