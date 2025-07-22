@@ -14,27 +14,9 @@ import {
   Typography,
   Grid,
   AppBar,
-  Toolbar,
   Container,
   Snackbar,
   Alert,
-  Tooltip,
-  Chip,
-  IconButton,
-  Paper,
-  Divider,
-  Badge,
-  List,
-  ListItem,
-  ListItemIcon,
-  ListItemText,
-  Tab,
-  Tabs,
-  Button,
-  CircularProgress,
-  LinearProgress,
-  Card,
-  CardContent
 } from "@mui/material";
 import BrainIcon from "@mui/icons-material/Psychology";
 import InfoIcon from "@mui/icons-material/Info";
@@ -42,22 +24,7 @@ import SettingsIcon from "@mui/icons-material/Settings";
 import FullscreenIcon from "@mui/icons-material/Fullscreen";
 import FullscreenExitIcon from "@mui/icons-material/FullscreenExit";
 import RefreshIcon from "@mui/icons-material/Refresh";
-import GroupWorkIcon from "@mui/icons-material/GroupWork";
-import OpenInNewIcon from "@mui/icons-material/OpenInNew";
-import CloseIcon from "@mui/icons-material/Close";
-import MemoryIcon from "@mui/icons-material/Memory";
-import SpeedIcon from "@mui/icons-material/Speed";
-import StorageIcon from "@mui/icons-material/Storage";
-import TimerIcon from "@mui/icons-material/Timer";
-import DeveloperBoardIcon from "@mui/icons-material/DeveloperBoard";
-import DevicesIcon from "@mui/icons-material/Devices";
-import SignalCellularAltIcon from "@mui/icons-material/SignalCellularAlt";
-import BarChartIcon from "@mui/icons-material/BarChart";
-import ScienceIcon from "@mui/icons-material/Science";
-import VerifiedIcon from "@mui/icons-material/Verified";
-import ErrorIcon from "@mui/icons-material/Error";
-import DashboardIcon from "@mui/icons-material/Dashboard";
-import TuneIcon from "@mui/icons-material/Tune";
+
 
 import BrainVisualization from "./BrainVisualization";
 import DataStatusIndicator from "./DataStatusIndicator";
@@ -66,7 +33,6 @@ import InfoPanel from "./dashboard/InfoPanel";
 import {
   BRAIN_DETAIL_URL,
   COLOR_SCALES,
-  getActivityColor,
 } from "./dashboard/constants";
 import { SettingsContext } from "../pages/index";
 import {
