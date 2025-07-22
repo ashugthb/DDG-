@@ -8,6 +8,7 @@
 #include <chrono>
 #include <thread>
 #include <algorithm>
+#include <numeric>
 #include <conio.h>
 #include <unordered_set>
 #include <map>
@@ -888,13 +889,19 @@ private:
         return;
     }
 
-    // Extract last windowSize samples
+    // Extract last windowSize samples and convert to 0/1 values
     std::vector<double> x(windowSize);
     for (int i = 0; i < windowSize; ++i) {
-        x[i] = ((samples[N - windowSize + i] >> channel) & 1) ? 1.0 : -1.0;
+        x[i] = ((samples[N - windowSize + i] >> channel) & 1) ? 1.0 : 0.0;
     }
 
-    // Apply Hamming window
+    // Remove DC offset which can dominate the transform
+    double meanOffset = std::accumulate(x.begin(), x.end(), 0.0) / windowSize;
+    for (double &v : x) {
+        v -= meanOffset;
+    }
+
+    // Apply Hamming window to reduce spectral leakage
     for (int i = 0; i < windowSize; ++i) {
         double w = 0.54 - 0.46 * std::cos(2 * M_PI * i / (windowSize - 1));
         x[i] *= w;
